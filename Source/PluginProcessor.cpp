@@ -1,0 +1,113 @@
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+#include "Presets.h"
+#include <BinaryData.h>
+using namespace juce; using namespace sk;
+static StringArray irNames(const IrInfo* t, int n) { StringArray s; for (int i = 0; i < n; ++i) s.add(t[i].name); return s; }
+static const StringArray destNames { "None","Wet/Dry","Drive","Telecom Line","Crush","EQ Band","Mic","Cover","Room","Output" };
+enum { dNone, dWet, dDrive, dLine, dCrush, dEq, dMic, dCover, dRoom, dOut, dCount };
+static AudioProcessorValueTreeState::ParameterLayout layout() {
+    AudioProcessorValueTreeState::ParameterLayout l;
+    auto F = [&](const String& id, const String& n, float a, float b, float d, float skew = 1.f, const char* u = "") { l.add(std::make_unique<AudioParameterFloat>(ParameterID { id, 1 }, n, NormalisableRange<float>(a, b, 0.f, skew), d, AudioParameterFloatAttributes().withLabel(u))); };
+    auto B = [&](const char* id, const char* n, bool d) { l.add(std::make_unique<AudioParameterBool>(ParameterID { id, 1 }, n, d)); };
+    auto C = [&](const String& id, const String& n, StringArray o, int d) { l.add(std::make_unique<AudioParameterChoice>(ParameterID { id, 1 }, n, o, d)); };
+    F("input","Input",-24,24,0,1,"dB"); F("makeup","Preset Level",-12,24,0,1,"dB"); F("output","Output",-24,24,0,1,"dB"); F("wet","Wet/Dry",0,1,1);
+    B("gateOn","Gate On",false); F("gate","Gate Threshold",-80,-10,-50,1,"dB"); F("gateRange","Gate Range",-80,0,-80,1,"dB"); F("gateRel","Gate Release",5,800,80,.5f,"ms");
+    B("compOn","Comp On",false); F("comp","Comp Amount",0,1,.4f); F("compRatio","Comp Ratio",1.5f,20,4,.5f); F("compAtk","Comp Attack",.2f,80,5,.5f,"ms"); F("compRel","Comp Release",10,800,120,.5f,"ms"); F("compGain","Comp Gain",-12,24,0,1,"dB");
+    B("eqOn","EQ On",false); F("eq","EQ Band",0,1,0); F("eqHp","HPF",20,2000,20,.3f,"Hz"); F("eqLp","LPF",800,20000,20000,.3f,"Hz"); F("eqLoF","Low Freq",40,800,150,.4f,"Hz"); F("eqLoG","Low Gain",-24,24,0,1,"dB"); F("eqHiF","High Freq",1000,16000,6000,.4f,"Hz"); F("eqHiG","High Gain",-24,24,0,1,"dB");
+    F("eqP1F","Peak 1 Freq",100,10000,800,.3f,"Hz"); F("eqP1G","Peak 1 Gain",-24,24,0,1,"dB"); F("eqP1Q","Peak 1 Q",.3f,12,1,.4f); F("eqP2F","Peak 2 Freq",100,10000,2500,.3f,"Hz"); F("eqP2G","Peak 2 Gain",-24,24,0,1,"dB"); F("eqP2Q","Peak 2 Q",.3f,12,1,.4f);
+    StringArray dt; for (auto* n : driveNames) dt.add(n); B("driveOn","Drive On",false); F("drive","Drive Pre",0,40,10,1,"dB"); F("drivePost","Drive Post",-40,6,-6,1,"dB"); C("driveType","Drive Type",dt,0); F("driveCurve","Drive Curve",0,1,.5f); F("driveMix","Drive Mix",0,1,1); F("preEqF","Pre EQ Freq",200,6000,1500,.4f,"Hz"); F("preEqG","Pre EQ Gain",-18,18,0,1,"dB"); F("preEqQ","Pre EQ Q",.3f,8,1,.4f); F("preEqLp","Pre EQ LPF",1000,20000,20000,.3f,"Hz");
+    StringArray cn; for (auto* n : codecNames) cn.add(n); C("codec","Codec",cn,0); F("line","Line Damage",0,1,0); F("telMix","Telecom Mix",0,1,1);
+    B("crushOn","Crush On",false); F("crush","Crush Amount",0,1,.3f);
+    B("modOn","Mod On",false); C("modType","Mod Type",{"TREMOLO","CHORUS","PHASER","FLANGER","VIBRATO"},1); F("modDepth","Mod Depth",0,1,.4f); F("modSpeed","Mod Speed",.05f,12,1,.4f,"Hz"); B("modSync","Mod Sync",false); C("modDiv","Mod Note",{"1/1","1/2","1/4","1/8","1/16"},2);
+    B("gramOn","Gramophone On",false); F("gramWow","Wow",0,1,.2f); F("gramCurve","Warp",0,1,.2f); F("gramTicks","Ticks",0,1,.3f); F("gramGain","Gram Gain",-18,12,0,1,"dB");
+    B("tuneOn","Tuning On",false); F("tuneX","Tuning Offset",-1,1,0); F("tuneY","Whistle Pitch",0,1,.4f); C("tuneMode","Tuning Band",{"AM","FM"},0);
+    C("spkPos","Speaker Position",{"POST","PRE"},0); B("spkOn","Speaker On",true); C("spkIdx","Speaker",irNames(ir_spk,ir_spk_count),0);
+    B("coverOn","Cover On",false); C("coverIdx","Cover Type",irNames(ir_cov,ir_cov_count),0); F("cover","Cover Mix",0,1,.8f); F("coverPitch","Cover Pitch",-12,12,0,1,"st");
+    B("micOn","Mic On",false); C("micIdx","Mic Type",irNames(ir_mic,ir_mic_count),0); F("mic","Mic Degrade",0,1,1);
+    B("roomOn","Room On",false); C("roomIdx","Room Type",irNames(ir_rom,ir_rom_count),0); F("room","Room Mix",0,1,.3f); F("roomDecay","Room Decay",.1f,1,1);
+    B("leslieOn","Leslie On",false); C("leslieMode","Leslie Mode",{"BRAKE","SLOW","FAST"},1); F("leslieLo","Slow Speed",0,1,.4f); F("leslieHi","Fast Speed",0,1,.5f); F("leslieLazy","Inertia",0,1,.5f); F("leslieWidth","Width",0,1,.8f); F("leslieAmt","Leslie Amount",0,1,.8f);
+    B("delayOn","Delay On",false); B("delaySync","Delay Sync",false); C("delayDivL","Delay Note L",{"1/2","1/4","1/8.","1/8","1/16"},3); C("delayDivR","Delay Note R",{"1/2","1/4","1/8.","1/8","1/16"},2); F("delayL","Delay L",1,2000,250,.4f,"ms"); F("delayR","Delay R",1,2000,375,.4f,"ms"); F("delayFeed","Feedback",0,.95f,.3f); F("delayX","Cross Feed",0,1,.2f); F("delayTone","LP/HP",-1,1,0); F("delayMix","Delay Mix",0,1,.25f);
+    StringArray wv { "SINE","TRIANGLE","SAW","SQUARE","RANDOM" }; for (int i = 1; i <= 4; ++i) { auto n = String(i), b = "lfo" + n; auto s = [&](const char* x) { return b + x; }; auto L = "LFO " + n + " ";
+        F(s("Rate"),L + "Speed",.02f,20,1,.3f,"Hz"); C(s("Wave"),L + "Wave",wv,0); F(s("Depth"),L + "Depth",0,1,.5f); C(s("Dest"),L + "Target",destNames,0); }
+    for (int i = 1; i <= 2; ++i) { auto n = String(i), b = "env" + n; auto L = "Env " + n + " "; F(b + "Amt",L + "Amount",-1,1,0); F(b + "Spd",L + "Speed",5,800,80,.4f,"ms"); C(b + "Dest",L + "Target",destNames,0); }
+    B("bayOn","Sample Bay On",true); F("bayGain","Sample Bay Gain",-48,12,0,1,"dB"); B("bayDuck","Sample Bay Duck",false); F("bayThr","Duck Threshold",-60,0,-30,1,"dB");
+    B("limiter","Out Limiter",true); B("muteStop","Mute On Stop",false); C("stereo","Input Mode",{"STEREO","MONO"},0);
+    return l;
+}
+SpeakitProcessor::SpeakitProcessor() : AudioProcessor(BusesProperties().withInput("Input", AudioChannelSet::stereo(), true).withOutput("Output", AudioChannelSet::stereo(), true)), apvts(*this, nullptr, "SPEAKIT", layout()) {
+    for (auto* p : getParameters()) if (auto* w = dynamic_cast<RangedAudioParameter*>(p)) pv[w->getParameterID().toStdString()] = apvts.getRawParameterValue(w->getParameterID());
+    for (int i = 0; i < 4; ++i) { String b = "lfo" + String(i + 1); lp[i][0] = pv[(b + "Dest").toStdString()]; lp[i][1] = pv[(b + "Rate").toStdString()]; lp[i][2] = pv[(b + "Wave").toStdString()]; lp[i][3] = pv[(b + "Depth").toStdString()]; }
+    fm.registerFormat(new FlacAudioFormat(), true); fm.registerFormat(new OggVorbisAudioFormat(), false); for (auto& b : bankPre) b = false;
+    applyPreset(0); startTimerHz(20);
+}
+SpeakitProcessor::~SpeakitProcessor() { stopTimer(); pool.removeAllJobs(true, 4000); for (auto& b : bay) for (auto& s : b) delete s.data.exchange(nullptr); }
+bool SpeakitProcessor::isBusesLayoutSupported(const BusesLayout& l) const { auto o = l.getMainOutputChannelSet(), i = l.getMainInputChannelSet(); if (o != AudioChannelSet::stereo() && o != AudioChannelSet::mono()) return false; return i == AudioChannelSet::stereo() ? o == AudioChannelSet::stereo() : i == AudioChannelSet::mono(); }
+void SpeakitProcessor::prepareToPlay(double s, int b) { sr = s; int bl = jmin(jmax(b, 64), maxB) ; bl = maxB; for (auto* c : { &cSpk,&cCov,&cMic,&cRoom }) c->prepare(s, bl); gate.prepare(s); comp.prepare(s); eq.prepare(s); drive.prepare(s, bl); tel.prepare(s); mod.prepare(s); gram.prepare(s); tune.prepare(s); les.prepare(s); dly.prepare(s); lim.prepare(s); preBus.setSize(2, bl); postBus.setSize(2, bl);
+    for (auto& l : loaded) l = -1; first = true; service(); setLatencySamples(tel.latency() + drive.lat + lim.latency()); }
+void SpeakitProcessor::loadIr(int k, int idx) {
+    const IrInfo* tb[4] = { ir_spk, ir_cov, ir_mic, ir_rom }; const float* gn[4] = { ir_spk_gain, ir_cov_gain, ir_mic_gain, ir_rom_gain }; int sz = 0; auto* d = BinaryData::getNamedResource(tb[k][idx].res, sz); if (!d) return;
+    std::unique_ptr<AudioFormatReader> r(fm.createReaderFor(std::make_unique<MemoryInputStream>(d, (size_t)sz, false))); if (!r) return;
+    AudioBuffer<float> b((int)r->numChannels, (int)r->lengthInSamples); r->read(&b, 0, b.getNumSamples(), 0, true, true); b.applyGain(gn[k][idx]);
+    if (k == 1) { float ratio = std::pow(2.f, P("coverPitch") / 12.f); if (std::abs(ratio - 1) > .002f) { AudioBuffer<float> o(b.getNumChannels(), int(b.getNumSamples() / ratio)); for (int c = 0; c < o.getNumChannels(); ++c) { auto* w = o.getWritePointer(c); auto* q = b.getReadPointer(c); for (int i = 0; i < o.getNumSamples(); ++i) { float p = i * ratio; int a = (int)p; float f = p - a; w[i] = q[a] + (a + 1 < b.getNumSamples() ? q[a + 1] - q[a] : 0) * f; } } b = std::move(o); } }
+    if (k == 3) { float dc = P("roomDecay"); if (dc < .99f) { float t = 1.2f * dc * dc; for (int c = 0; c < b.getNumChannels(); ++c) { auto* w = b.getWritePointer(c); for (int i = 0; i < b.getNumSamples(); ++i) w[i] *= std::exp(-float(i) / 48000.f / t * 3.f); } } }
+    Conv* cv[4] = { &cSpk,&cCov,&cMic,&cRoom }; cv[k]->c.loadImpulseResponse(std::move(b), r->sampleRate, dsp::Convolution::Stereo::yes, dsp::Convolution::Trim::no, dsp::Convolution::Normalise::no);
+}
+void SpeakitProcessor::service() {
+    const char* ids[4] = { "spkIdx","coverIdx","micIdx","roomIdx" }; float pitch = P("coverPitch"), dec = P("roomDecay");
+    for (int k = 0; k < 4; ++k) { int v = (int)P(ids[k]); bool forced = (k == 1 && std::abs(pitch - lPitch) > .05f) || (k == 3 && std::abs(dec - lDecay) > .01f); if (v != loaded[k] || forced) { loaded[k] = v; if (k == 1) lPitch = pitch; if (k == 3) lDecay = dec; loadIr(k, v); } }
+}
+void SpeakitProcessor::ensureLoaded(int b, int s) { auto& sl = bay[b][s]; if (sl.data.load()) return; pool.addJob([this, b, s] { auto& q = bay[b][s]; if (q.data.load()) return; int sz = 0; auto* d = BinaryData::getNamedResource(bayTable[b][s].res, sz); if (!d) return; std::unique_ptr<AudioFormatReader> r(fm.createReaderFor(std::make_unique<MemoryInputStream>(d, (size_t)sz, false))); if (!r) return; auto* a = new AudioBuffer<float>(2, (int)r->lengthInSamples); r->read(a, 0, a->getNumSamples(), 0, true, true); delete q.data.exchange(a); }); }
+void SpeakitProcessor::waitForBay() { while (pool.getNumJobs() > 0) Thread::sleep(5); }
+void SpeakitProcessor::setSlot(int b, int s, bool on) { if (on) ensureLoaded(b, s); bay[b][s].pos = on ? 0 : bay[b][s].pos; bay[b][s].on = on; }
+int SpeakitProcessor::getNumPrograms() { return (int)std::size(factory); } const String SpeakitProcessor::getProgramName(int i) { return factory[i].name; } String SpeakitProcessor::presetName() { return factory[presetIdx].name; } void SpeakitProcessor::setCurrentProgram(int i) { if (isPositiveAndBelow(i, getNumPrograms())) applyPreset(i); }
+void SpeakitProcessor::applyPreset(int i) { presetIdx = i; const StringArray keep { "input","output","wet","limiter","muteStop","stereo" };
+    for (auto* p : getParameters()) if (auto* w = dynamic_cast<RangedAudioParameter*>(p)) if (!keep.contains(w->getParameterID())) w->setValueNotifyingHost(w->getDefaultValue());
+    for (auto& b : bay) for (auto& s : b) { s.on = false; s.gain = 1; } for (auto& b : bankPre) b = false;
+    for (auto& t : StringArray::fromTokens(factory[i].s, ";", "")) { auto k = t.upToFirstOccurrenceOf("=", false, false), v = t.fromFirstOccurrenceOf("=", false, false);
+        if (k == "bay") { auto bn = v.upToFirstOccurrenceOf("/", false, false), sn = v.fromFirstOccurrenceOf("/", false, false).upToFirstOccurrenceOf("@", false, false); float g = v.fromFirstOccurrenceOf("@", false, false).getFloatValue(); for (int b = 0; b < 5; ++b) if (bn == bayBanks[b]) for (int s = 0; s < 12; ++s) if (sn == bayTable[b][s].name) { bay[b][s].gain = Decibels::decibelsToGain(g); setSlot(b, s, true); bankShown = b; } continue; }
+        if (k == "spk") k = "spkIdx"; auto* p = apvts.getParameter(k); jassert(p != nullptr); if (!p) continue;
+        if (auto* c = dynamic_cast<AudioParameterChoice*>(p)) { int x = c->choices.indexOf(v); jassert(x >= 0); c->setValueNotifyingHost(c->convertTo0to1((float)x)); } else p->setValueNotifyingHost(p->convertTo0to1(v.getFloatValue())); }
+    updateHostDisplay(); }
+void SpeakitProcessor::storeSnap(int i) { snaps[i] = apvts.copyState(); snapNow = i; } void SpeakitProcessor::recallSnap(int i) { if (snaps[i].isValid()) { apvts.replaceState(snaps[i].createCopy()); snapNow = i; } }
+void SpeakitProcessor::getStateInformation(MemoryBlock& m) { auto st = apvts.copyState(); ValueTree x("EXTRA"); x.setProperty("preset", presetIdx, nullptr); ValueTree by("BAY"); for (int b = 0; b < 5; ++b) { by.setProperty("pre" + String(b), bankPre[b].load(), nullptr); for (int s = 0; s < 12; ++s) { by.setProperty("g" + String(b) + "_" + String(s), bay[b][s].gain.load(), nullptr); by.setProperty("o" + String(b) + "_" + String(s), bay[b][s].on.load(), nullptr); } } x.appendChild(by, nullptr); ValueTree sn("SNAPS"); for (int i = 0; i < 10; ++i) if (snaps[i].isValid()) { auto c = snaps[i].createCopy(); c.setProperty("slot", i, nullptr); sn.appendChild(c, nullptr); } x.appendChild(sn, nullptr); st.appendChild(x, nullptr); copyXmlToBinary(*st.createXml(), m); }
+void SpeakitProcessor::setStateInformation(const void* d, int n) { auto xml = getXmlFromBinary(d, n); if (!xml) return; auto t = ValueTree::fromXml(*xml); auto x = t.getChildWithName("EXTRA"); t.removeChild(x, nullptr); apvts.replaceState(t); for (auto c : t) if (c.hasType("PARAM")) if (auto* q = apvts.getParameter(c["id"].toString())) q->setValueNotifyingHost(q->convertTo0to1((float)c["value"])); if (x.isValid()) { presetIdx = x.getProperty("preset", 0); auto by = x.getChildWithName("BAY"); for (int b = 0; b < 5; ++b) { bankPre[b] = (bool)by.getProperty("pre" + String(b), false); for (int s = 0; s < 12; ++s) { bay[b][s].gain = (float)by.getProperty("g" + String(b) + "_" + String(s), 1.f); setSlot(b, s, (bool)by.getProperty("o" + String(b) + "_" + String(s), false)); } } auto sn = x.getChildWithName("SNAPS"); for (auto c : sn) { int i = c.getProperty("slot"); snaps[i] = c.createCopy(); snaps[i].removeProperty("slot", nullptr); } } }
+static float ss(float a, float b, float x) { float t = jlimit(0.f, 1.f, (x - a) / (b - a)); return t * t * (3 - 2 * t); }
+void SpeakitProcessor::processBlock(AudioBuffer<float>& buf, MidiBuffer& midi) { ScopedNoDenormals nd; int ch = buf.getNumChannels(), N = buf.getNumSamples(); if (ch > 1 && getTotalNumInputChannels() == 1) buf.copyFrom(1, 0, buf, 0, 0, N); auto* L = buf.getWritePointer(0); auto* R = ch > 1 ? buf.getWritePointer(1) : nullptr; for (int s = 0; s < N; s += maxB) { int n = jmin(maxB, N - s); float* a = L + s; float* b = R ? R + s : a; float mono[maxB]; if (!R) { std::copy(a, a + n, mono); b = mono; } chain(a, b, n, s == 0 ? &midi : nullptr, 0); if (!R) for (int i = 0; i < n; ++i) a[i] = .5f * (a[i] + mono[i]); } for (int c = 2; c < getTotalNumOutputChannels(); ++c) buf.clear(c, 0, N); }
+void SpeakitProcessor::chain(float* L, float* R, int n, MidiBuffer* midi, int) {
+    if (midi) for (auto m : *midi) { auto e = m.getMessage(); if (e.isNoteOn()) { int x = e.getNoteNumber() - 36; if (x >= 0 && x < 60) { int b = x / 12, s = x % 12; if (bayTable[b][s].loop) setSlot(b, s, !bay[b][s].on.load()); else { setSlot(b, s, false); setSlot(b, s, true); } } } }
+    bool stopped = false; if (P("muteStop") > .5f) if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) stopped = !pos->getIsPlaying();
+    double bpm = 120; if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) if (auto v = pos->getBpm()) bpm = *v;
+    float ig = db2g(P("input")), og = db2g(P("output") + P("makeup")); FloatVectorOperations::multiply(L, ig, n); FloatVectorOperations::multiply(R, ig, n); if (P("stereo") > .5f) for (int i = 0; i < n; ++i) L[i] = R[i] = .5f * (L[i] + R[i]);
+    inDb = jmax(g2db(jmax(FloatVectorOperations::findMaximum(L, n), -FloatVectorOperations::findMinimum(L, n), FloatVectorOperations::findMaximum(R, n), -FloatVectorOperations::findMinimum(R, n))), inDb.load() - .8f);
+    // envelope followers on the input
+    float dt = float(n) / (float)sr; float envVal[2]; for (int e = 0; e < 2; ++e) { float pk = 0; for (int i = 0; i < n; ++i) pk = jmax(pk, std::abs(L[i])); float rate = 1 - std::exp(-dt * 1000 / P(e ? "env2Spd" : "env1Spd")); env[e] += (jmin(1.f, pk * 2) - env[e]) * rate; envVal[e] = env[e] * P(e ? "env2Amt" : "env1Amt"); }
+    const int S = ((n - 1) >> 5) + 1; float mods[dCount] {}; for (int i = 0; i < 4; ++i) { int ds = (int)lp[i][0]->load(); lfoPh[i] += lp[i][1]->load() * dt; lfoPh[i] -= std::floor(lfoPh[i]); if (ds) mods[ds] += lfoWave((int)lp[i][2]->load(), lfoPh[i], rnd, sh[i], last[i]) * lp[i][3]->load(); }
+    for (int e = 0; e < 2; ++e) { int ds = (int)P(e ? "env2Dest" : "env1Dest"); if (ds) mods[ds] += envVal[e]; }
+    float w = jlimit(0.f, 1.f, P("wet") + mods[dWet]);
+    enum { xG, xC, xE, xD, xT, xK, xM, xGr, xTu, xS, xCv, xMc, xL, xDl, xR }; auto tgt = [&](int k, const char* on, float a, float b, float amt = 1.f) { float t = (on == nullptr || P(on) > .5f) ? ss(a, b, w) * amt : 0.f; if (first) slotMix[k] = t; return t; };
+    float T[15] = { tgt(xG,"gateOn",0,.4f), tgt(xC,"compOn",0,.5f), tgt(xE,"eqOn",.3f,1), tgt(xD,"driveOn",0,.6f,P("driveMix")), tgt(xT,nullptr,.1f,.7f,P("telMix")), tgt(xK,"crushOn",0,.5f), tgt(xM,"modOn",0,.5f), tgt(xGr,"gramOn",0,.5f), tgt(xTu,"tuneOn",.1f,.7f), tgt(xS,"spkOn",.3f,1), tgt(xCv,"coverOn",.2f,.8f,jlimit(0.f,1.f,P("cover")+mods[dCover])), tgt(xMc,"micOn",.2f,1,jlimit(0.f,1.f,P("mic")+mods[dMic])), tgt(xL,"leslieOn",0,.6f,P("leslieAmt")), tgt(xDl,"delayOn",0,.7f,P("delayMix")), tgt(xR,"roomOn",0,.7f,jlimit(0.f,1.f,P("room")+mods[dRoom])) }; first = false;
+    static thread_local float M[15][66]; float slotC = 1 - std::exp(-32.f / float(sr * .004f)); for (int k = 0; k < 15; ++k) for (int s = 0; s < S; ++s) { slotMix[k] += (T[k] - slotMix[k]) * slotC; M[k][s] = slotMix[k]; }
+    static thread_local float dA[66], lA[66], kA[66], eA[66]; static thread_local int cA[66]; int cod = (int)P("codec"); float lineV = stopped ? 0.f : jlimit(0.f, 1.f, P("line") + mods[dLine]);
+    for (int s = 0; s < S; ++s) { dA[s] = jlimit(0.f, 40.f, P("drive") + mods[dDrive] * 20); lA[s] = lineV; kA[s] = jlimit(0.f, 1.f, P("crush") + mods[dCrush]); eA[s] = jlimit(0.f, 1.f, P("eq") + mods[dEq]); cA[s] = cod; }
+    // sample bay buses
+    float* pre[2] = { preBus.getWritePointer(0), preBus.getWritePointer(1) }; float* post[2] = { postBus.getWritePointer(0), postBus.getWritePointer(1) }; FloatVectorOperations::clear(pre[0], n); FloatVectorOperations::clear(pre[1], n); FloatVectorOperations::clear(post[0], n); FloatVectorOperations::clear(post[1], n);
+    float bg = db2g(P("bayGain")) * (P("bayOn") > .5f && !stopped ? 1.f : 0.f); if (P("bayDuck") > .5f) { float pk = jmax(FloatVectorOperations::findMaximum(L, n), -FloatVectorOperations::findMinimum(L, n)); duckEnv += (pk - duckEnv) * (pk > duckEnv ? .5f : .03f); duckG += ((duckEnv > db2g(P("bayThr")) ? .2f : 1.f) - duckG) * .08f; bg *= duckG; }
+    for (int b = 0; b < 5; ++b) for (int s = 0; s < 12; ++s) { auto& q = bay[b][s]; bool on = q.on.load(); auto* d = q.data.load(); if (!d || (!on && q.env <= 0)) continue; float g = q.gain.load() * bg; auto** o = bankPre[b].load() ? pre : post; double inc = 48000.0 / sr; int len = d->getNumSamples(); auto* a = d->getReadPointer(0); auto* c = d->getReadPointer(1);
+        for (int i = 0; i < n; ++i) { float tg = on ? 1.f : 0.f; q.env += (tg - q.env) * .003f; if (!on && q.env < .001f) { q.env = 0; break; } if (q.pos >= len - 1) { if (bayTable[b][s].loop) q.pos -= len - 1; else { q.on = false; q.env = 0; break; } } int p = (int)q.pos; float f = float(q.pos - p); o[0][i] += (a[p] + (a[p + 1] - a[p]) * f) * q.env * g; o[1][i] += (c[p] + (c[p + 1] - c[p]) * f) * q.env * g; q.pos += inc; } }
+    FloatVectorOperations::add(L, pre[0], n); FloatVectorOperations::add(R, pre[1], n);
+    bool spkPre = P("spkPos") > .5f; if (spkPre) cSpk.process(L, R, n, M[xS]);
+    gate.process(L, R, n, M[xG], P("gate"), P("gateRange"), P("gateRel")); float gr = 1; float amt = P("comp"); comp.process(L, R, n, M[xC], -amt * 42, P("compRatio"), P("compAtk"), P("compRel"), P("compGain") + amt * 12, gr); grDb = g2db(gr);
+    eq.process(L, R, n, M[xE], eA, P("eqHp"), P("eqLp"), P("eqLoF"), P("eqLoG"), P("eqHiF"), P("eqHiG"), P("eqP1F"), P("eqP1G"), P("eqP1Q"), P("eqP2F"), P("eqP2G"), P("eqP2Q"));
+    drive.process(L, R, n, M[xD], dA, P("drivePost"), (int)P("driveType"), P("driveCurve"), P("preEqF"), P("preEqG"), P("preEqQ"), P("preEqLp"));
+    tel.process(L, R, n, cA, lA, M[xT], rnd); crush.process(L, R, n, M[xK], kA);
+    static const float mdiv[] = { 4,2,1,.5f,.25f }; float mhz = P("modSync") > .5f ? float(bpm / 60.0 / mdiv[(int)P("modDiv")]) : P("modSpeed"); mod.process(L, R, n, M[xM], (int)P("modType"), P("modDepth"), mhz);
+    gram.process(L, R, n, M[xGr], P("gramWow"), P("gramCurve"), stopped ? 0.f : P("gramTicks"), P("gramGain")); tune.process(L, R, n, M[xTu], stopped ? 0.f : P("tuneX"), P("tuneY"), (int)P("tuneMode"));
+    if (!spkPre) cSpk.process(L, R, n, M[xS]); cCov.process(L, R, n, M[xCv]); cMic.process(L, R, n, M[xMc]); les.process(L, R, n, M[xL], (int)P("leslieMode"), P("leslieLo"), P("leslieHi"), P("leslieLazy"), P("leslieWidth"));
+    static const float ddiv[] = { 2,1,.75f,.5f,.25f }; float bt = float(60000.0 / bpm), dL = P("delaySync") > .5f ? bt * ddiv[(int)P("delayDivL")] : P("delayL"), dR = P("delaySync") > .5f ? bt * ddiv[(int)P("delayDivR")] : P("delayR"); dly.process(L, R, n, M[xDl], jmin(dL, 2000.f), jmin(dR, 2000.f), P("delayFeed"), P("delayX"), P("delayTone"));
+    cRoom.process(L, R, n, M[xR]); FloatVectorOperations::add(L, post[0], n); FloatVectorOperations::add(R, post[1], n);
+    float ot = og * (1 + jlimit(-1.f, 1.f, mods[dOut]) * .5f); FloatVectorOperations::multiply(L, ot, n); FloatVectorOperations::multiply(R, ot, n); lim.process(L, R, n, P("limiter") > .5f);
+    outDb = jmax(g2db(jmax(FloatVectorOperations::findMaximum(L, n), -FloatVectorOperations::findMinimum(L, n))), outDb.load() - .8f);
+}
+juce::AudioProcessorEditor* SpeakitProcessor::createEditor() { return new SpeakitEditor(*this); }
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new SpeakitProcessor(); }

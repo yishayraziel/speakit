@@ -1,0 +1,7 @@
+build/
+.DS_Store
+out/
+pkgroot/
+dmg/
+*.pkg
+third_party/JUCE/
