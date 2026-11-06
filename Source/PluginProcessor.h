@@ -30,7 +30,7 @@ private:
     void timerCallback() override { service(); } void loadIr(int kind, int idx); void chain(float* L, float* R, int n, juce::MidiBuffer* midi, int offset);
     struct Conv { juce::dsp::Convolution c { juce::dsp::Convolution::NonUniform { 512 } }; juce::AudioBuffer<float> w; void prepare(double sr, int b) { w.setSize(2, b); c.prepare({ sr, (juce::uint32)b, 2 }); c.reset(); }
         void process(float* L, float* R, int n, const float* mix) { bool any = false; for (int i = 0; i <= (n - 1) >> 5; ++i) any |= mix[i] > 1e-4f; if (!any) return; w.copyFrom(0, 0, L, n); w.copyFrom(1, 0, R, n); float* p[2] = { w.getWritePointer(0), w.getWritePointer(1) }; juce::dsp::AudioBlock<float> b(p, 2, (size_t)n); c.process(juce::dsp::ProcessContextReplacing<float>(b));
-            for (int i = 0; i < n; ++i) { float m = mix[i >> 5]; L[i] += (p[0][i] - L[i]) * m; R[i] += (p[1][i] - R[i]) * m; } } };
+            for (int i = 0; i < n; ++i) { int s = i >> 5; float m = mix[s - 1] + (mix[s] - mix[s - 1]) * float((i & 31) + 1) / 32.f; L[i] += (p[0][i] - L[i]) * m; R[i] += (p[1][i] - R[i]) * m; } } }; // mix[-1] is the previous slot: fade per sample, no zipper
     Conv cSpk, cCov, cMic, cRoom; int loaded[4] { -1, -1, -1, -1 }; float lPitch = -99, lDecay = -1;
     sk::Gate gate; sk::Comp comp; sk::Eq eq; sk::Drive drive; sk::Telecom tel; sk::Crush crush; sk::Mod mod; sk::Gramophone gram; sk::Tuning tune; sk::Leslie les; sk::StereoDelay dly; sk::Limiter lim;
     double sr = 48000; juce::Random rnd; float lfoPh[4] {}, sh[4] {}, last[4] {}, env[2] {}, duckEnv = 0, duckG = 1; float slotMix[16] {}; bool first = true;
