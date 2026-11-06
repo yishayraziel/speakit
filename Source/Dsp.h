@@ -21,7 +21,7 @@ struct Biquad { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1[2] {}, z2[2] {}
         set(A * ((A + 1) + (A - 1) * c + r), -2 * A * ((A - 1) + (A + 1) * c), A * ((A + 1) + (A - 1) * c - r), (A + 1) - (A - 1) * c + r, 2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - r); }
 };
 struct Delay { std::vector<float> b; int w = 0, n = 0; void size(int s) { n = s; b.assign((size_t)s, 0.f); w = 0; } void clear() { std::fill(b.begin(), b.end(), 0.f); }
-    void push(float x) { b[(size_t)w] = x; if (++w >= n) w = 0; } float at(float d) const { float p = float(w) - 1.f - d; while (p < 0) p += n; int i = int(p); float f = p - i; int j = i + 1 >= n ? 0 : i + 1; return b[(size_t)i] + (b[(size_t)j] - b[(size_t)i]) * f; } };
+    void push(float x) { b[(size_t)w] = x; if (++w >= n) w = 0; } float at(float d) const { double p = double(w) - 1.0 - double(d); while (p < 0) p += n; int i = int(p); if (i >= n) i -= n; float f = float(p - i); int j = i + 1 >= n ? 0 : i + 1; return b[(size_t)i] + (b[(size_t)j] - b[(size_t)i]) * f; } };
 
 struct Gate { double sr = 48000; float env = 0, g = 1; int hold = 0; void prepare(double s) { sr = s; env = 0; g = 1; }
     void process(float* L, float* R, int n, const float* mix, float thr, float rangeDb, float relMs) { float atk = 1 - std::exp(-1 / float(sr * .001)), rel = 1 - std::exp(-1 / float(sr * relMs * .001)), floor = db2g(rangeDb), t = db2g(thr);
