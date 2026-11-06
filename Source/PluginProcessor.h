@@ -17,7 +17,7 @@ public:
     int getNumPrograms() override; int getCurrentProgram() override { return presetIdx; } void setCurrentProgram(int) override; const juce::String getProgramName(int) override; void changeProgramName(int, const juce::String&) override {}
     void getStateInformation(juce::MemoryBlock&) override; void setStateInformation(const void*, int) override;
     juce::AudioProcessorValueTreeState apvts; static constexpr int maxB = 2048;
-    std::atomic<float> inDb { -90 }, outDb { -90 }, grDb { 0 };
+    inline static std::atomic<int> guardHits { 0 }; std::atomic<float> inDb { -90 }, outDb { -90 }, grDb { 0 };
     void service(); // applies pending IR changes; called by timer, and by tests
     // sample bay
     struct Slot { std::atomic<bool> on { false }; std::atomic<float> gain { 1 }; std::atomic<juce::AudioBuffer<float>*> data { nullptr }; double pos = 0; float env = 0; };

@@ -110,6 +110,8 @@ void SpeakitProcessor::chain(float* L, float* R, int n, MidiBuffer* midi, int) {
     static const float ddiv[] = { 2,1,.75f,.5f,.25f }; float bt = float(60000.0 / bpm), dL = P("delaySync") > .5f ? bt * ddiv[(int)P("delayDivL")] : P("delayL"), dR = P("delaySync") > .5f ? bt * ddiv[(int)P("delayDivR")] : P("delayR"); dly.process(L, R, n, M[xDl], jmin(dL, 2000.f), jmin(dR, 2000.f), P("delayFeed"), P("delayX"), P("delayTone"));
     cRoom.process(L, R, n, M[xR]); FloatVectorOperations::add(L, post[0], n); FloatVectorOperations::add(R, post[1], n);
     float ot = og * (1 + jlimit(-1.f, 1.f, mods[dOut]) * .5f); for (int i = 0; i < n; ++i) { float g = outS.next(ot); L[i] *= g; R[i] *= g; } lim.process(L, R, n, P("limiter") > .5f);
+    { bool ok = true; for (int i = 0; i < n; ++i) ok &= std::isfinite(L[i]) && std::isfinite(R[i]); // safety net: never pass bad values to the host, and clear poisoned state
+      if (!ok) { ++guardHits; FloatVectorOperations::clear(L, n); FloatVectorOperations::clear(R, n); for (auto* c : { &cSpk,&cCov,&cMic,&cRoom }) c->c.reset(); eq.prepare(sr); drive.clearState(); mod.clear(); gram.clear(); les.clear(); dly.clear(); lim.clear(); } }
     outDb = jmax(g2db(jmax(FloatVectorOperations::findMaximum(L, n), -FloatVectorOperations::findMinimum(L, n))), outDb.load() - .8f);
 }
 juce::AudioProcessorEditor* SpeakitProcessor::createEditor() { return new SpeakitEditor(*this); }
