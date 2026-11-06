@@ -11,7 +11,7 @@ public:
     SpeakitProcessor(); ~SpeakitProcessor() override;
     void prepareToPlay(double, int) override; void releaseResources() override {}
     bool isBusesLayoutSupported(const BusesLayout&) const override;
-    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override; void processBlockBypassed(juce::AudioBuffer<float>&, juce::MidiBuffer&) override; void loadPreset(int i) { applyPreset(i); }
     juce::AudioProcessorEditor* createEditor() override; bool hasEditor() const override { return true; }
     const juce::String getName() const override { return "Speakit"; } bool acceptsMidi() const override { return true; } bool producesMidi() const override { return false; } double getTailLengthSeconds() const override { return 4.0; }
     int getNumPrograms() override; int getCurrentProgram() override { return presetIdx; } void setCurrentProgram(int) override; const juce::String getProgramName(int) override; void changeProgramName(int, const juce::String&) override {}
@@ -35,8 +35,10 @@ private:
     sk::Gate gate; sk::Comp comp; sk::Eq eq; sk::Drive drive; sk::Telecom tel; sk::Crush crush; sk::Mod mod; sk::Gramophone gram; sk::Tuning tune; sk::Leslie les; sk::StereoDelay dly; sk::Limiter lim;
     double sr = 48000; juce::Random rnd; float lfoPh[4] {}, sh[4] {}, last[4] {}, env[2] {}, duckEnv = 0, duckG = 1; float slotMix[16] {}; bool first = true;
     juce::AudioBuffer<float> preBus, postBus; juce::AudioFormatManager fm; juce::ThreadPool pool { 1 }; juce::ValueTree snaps[10];
-    std::unordered_map<std::string, std::atomic<float>*> pv; float P(const char* id) const { return pv.at(id)->load(); }
-    std::atomic<float>* lp[4][4] {};
+    std::unordered_map<std::string, std::atomic<float>*> pv; float PS(const char* id) const { return pv.at(id)->load(); }
+    mutable std::unordered_map<const void*, std::atomic<float>*> fast; bool warming = false;
+    float P(const char* id) { auto i = fast.find(id); if (i != fast.end()) return i->second->load(); auto* a = pv.at(id); if (warming) fast[id] = a; return a->load(); }
+    std::atomic<float>* lp[4][4] {}; sk::Smooth inS, outS; sk::Delay byp[2]; std::atomic<bool> want[5][12];
     void applyPreset(int i);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpeakitProcessor)
 };

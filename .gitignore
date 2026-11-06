@@ -5,3 +5,4 @@ pkgroot/
 dmg/
 *.pkg
 third_party/JUCE/
+build_asan/

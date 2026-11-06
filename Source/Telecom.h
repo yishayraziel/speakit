@@ -13,7 +13,7 @@ inline const char* const codecNames[] = {"OFF","G711 ULAW","G711 ALAW","ADPCM 32
 
 class Telecom {
 public:
-    static constexpr int frame = 160, speexExtra = 40;
+    static constexpr int frame = 160, speexExtra = 80;
     ~Telecom() { release(); }
     void prepare(double sampleRate) {
         release(); sr = sampleRate;
@@ -49,8 +49,9 @@ public:
     void process(float* L, float* R, int n, const int* codec, const float* line, const float* mix, juce::Random& rnd) {
         for (int i = 0; i < n; ++i) {
             int want = codec[i >> 5];
-            if (want != active) { if (fade <= 0.001f) { active = want; pending = false; if (want != cOff) resetCodecOnly(); } else pending = true; }
-            float tgt = (active == cOff || want != active) ? 0.f : mix[i >> 5];
+            if (want != active) { if (fade <= 0.001f) { active = want; pending = false; hold = lat; if (want != cOff) resetCodecOnly(); } else pending = true; }
+            if (hold > 0) --hold; // old codec audio still in the pipe: stay on dry until the new codec arrives
+            float tgt = (active == cOff || want != active || hold > 0) ? 0.f : mix[i >> 5];
             fade += (tgt - fade) * fadeC; lineNow = line[i >> 5];
             float m = 0.5f * (L[i] + R[i]);
             float w = active == cOff ? 0.f : tick(m, lineNow);
@@ -86,10 +87,10 @@ private:
     }
     void runFrame(float line) {
         float out[frame]; codecRound(inBuf, out, active == cOff ? cUlaw : active, line);
-        // Speex is 40 samples late by design; everything else waits the same 40.
-        const bool sp = active == cSpeex15 || active == cSpeex8 || active == cSpeex2;
+        // Speex decodes late by design; the faster codecs wait, so the delay is the same for all.
+        const int own = (active == cSpeex15 || active == cSpeex8) ? speexExtra : active == cSpeex2 ? 57 : 0, wait = speexExtra - own;
         for (int i = 0; i < frame; ++i) { float v = out[i];
-            if (!sp) { float d = comp[(size_t)cw]; comp[(size_t)cw] = v; cw = (cw + 1) % speexExtra; v = d; }
+            if (wait > 0) { float d = comp[(size_t)cw]; comp[(size_t)cw] = v; cw = (cw + 1) % wait; v = d; }
             fifo[(size_t)((rp + count) % (int)fifo.size())] = v; ++count; }
     }
     static int ulaw(int s) { const int B = 132; int sign = s < 0 ? 0x80 : 0; if (s < 0) s = -s; s = juce::jmin(s, 32635) + B; int e = 7; for (int m = 0x4000; (s & m) == 0 && e > 0; --e, m >>= 1) {} int man = (s >> (e + 3)) & 15; return ~(sign | (e << 4) | man) & 255; }
@@ -133,7 +134,7 @@ private:
         for (int i = 0; i < frame; ++i) out[i] = o[i] / 32768.f;
         if (bad && c != cGsm && c < cSpeex15) for (int i = 0; i < frame; ++i) out[i] = 0;
     }
-    double sr = 48000, ratio = 1, phD = 0, phU = 0; int taps = 0, dpos = 0, upos = 0, lat = 0, dw = 0, active = cOff, cw = 0; bool pending = false;
+    double sr = 48000, ratio = 1, phD = 0, phU = 0; int taps = 0, dpos = 0, upos = 0, lat = 0, dw = 0, active = cOff, cw = 0; bool pending = false; int hold = 0;
     std::vector<float> fir, hDown, hUp; std::vector<std::array<float, 2>> dry;
     float prev = 0, inBuf[frame] {}, hist[4] {}, fade = 0, lineNow = 0, burst = 0, past[80] {}, lpcMem[10] {}, lpcG = 0; int nIn = 0, pulse = 0;
     static constexpr int prefill = frame + 16; static constexpr float fadeC = 0.004f;
