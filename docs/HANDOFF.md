@@ -1,6 +1,6 @@
 # Anal-Log (formerly Speakit): project handoff
 
-Read this before working on Anal-Log. It records what was built, why, and what is still open, as of version 0.4.5 (2026-11-07). The product was renamed from Speakit to Anal-Log in 0.4.0; internal names (CMake target SPEAKIT, classes SpeakitProcessor/SpeakitEditor, repo yishayraziel/speakit) were kept.
+Read this before working on Anal-Log. It records what was built, why, and what is still open, as of version 0.4.6 (2026-11-07). The product was renamed from Speakit to Anal-Log in 0.4.0; internal names (CMake target SPEAKIT, classes SpeakitProcessor/SpeakitEditor, repo yishayraziel/speakit) were kept.
 
 ## What it is
 
@@ -57,7 +57,7 @@ Input gain, then Sample Bay PRE bus, then Speaker if set to PRE, then Gate, Comp
   - **Index stability:** choice parameters store an index, so new IRs are only ever appended to the end of a list (list `N` in the script). Menus and the < > arrows walk the list grouped by `group` (`irOrder()` / `irMenu()` in `PluginEditor.cpp`), so appended rows still land in the right submenu.
   - Raw downloads live on the owner's Mac in `~/Downloads/Anal-Log IRs/` (MIT `Audio.zip`, the 9.3 GB BUT `.tgz`, `MicIRP/`). Only room L207 of BUT was extracted: the Mac's shell kills processes after 3 minutes, and the other BUT rooms are 16 kHz and duplicate MIT's space types.
 - **Sample Bay:** 60 sounds in 5 banks of 12 (STREET, INDOORS, LINE, MACHINES, MUSIC), Ogg Vorbis. Sources: CC0 recordings from noixer (from Freesound) and AtomCut packs, plus original synthesized line sounds (dial tones, DTMF, modem, hum, hiss). MIDI note 36 and up triggers pads. Built by `tools/prepare_samples.py`, which writes `Source/BayManifest.h`.
-- **Presets:** 26 factory presets in `Source/Presets.h`. The display adds " *" when a preset has been edited.
+- **Presets:** 55 factory presets in `Source/Presets.h`, each with a category: PHONES, RADIO & COMMS, PA & ANNOUNCEMENTS, PLACES, VINTAGE, FX. The preset menu has a submenu per category, and the < > arrows step in the same order (`presetOrder()`). Sessions store the preset index, so new presets are only appended to the end. Each preset's `makeup` is set so all presets land within about 4 dB on speech (run `SK_QA_LEVELS=1 sk_qa voice.wav content` to print levels when adding presets; target about -18 dB). The display adds " *" when a preset has been edited.
 
 ## UI (0.4.0)
 

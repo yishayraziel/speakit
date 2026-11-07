@@ -2,6 +2,7 @@
 // Everything is laid out on the 1686 x 933 chassis and scaled as one.
 #include "PluginEditor.h"
 #include <BinaryData.h>
+#include "Presets.h"
 using namespace juce;
 
 namespace {
@@ -223,7 +224,7 @@ struct SpeakitEditor::Impl : Component {
     bool on(int m) { if (m == 4) return V("telOn") > .5f && V("codec") > .5f; auto* id = modules()[(size_t)m].onId; return id && V(id) > .5f; }
     void toggle(int m) { if (m == 4) { if (V("codec") < .5f) { setParam(p.apvts.getParameter("codec"), 4); setParam(p.apvts.getParameter("telOn"), 1); } else setParam(p.apvts.getParameter("telOn"), V("telOn") > .5f ? 0.f : 1.f); return; } auto* id = modules()[(size_t)m].onId; if (id) setParam(p.apvts.getParameter(id), V(id) > .5f ? 0.f : 1.f); }
     Impl(SpeakitProcessor& q) : p(q), crt(q) { setLookAndFeel(&lnf); setSize((int)W, (int)H); auto& ms = modules();
-        addAndMakeVisible(crt); crt.setBounds(87, 129, 478, 463); crt.sel = [this] { return sel; }; crt.pick = [this](int m) { show(m); }; crt.isOn = [this](int m) { return on(m); }; crt.step = [this](int d) { int n = p.getNumPrograms(); p.loadPreset((p.getCurrentProgram() + d + n) % n); syncPads(); }; crt.presetMenu = [this] { PopupMenu m; for (int i = 0; i < p.getNumPrograms(); ++i) m.addItem(i + 1, p.getProgramName(i), true, i == p.getCurrentProgram()); styled(m, &crt); m.showMenuAsync(PopupMenu::Options().withTargetComponent(crt), [this](int x) { if (x > 0) { p.loadPreset(x - 1); syncPads(); } }); };
+        addAndMakeVisible(crt); crt.setBounds(87, 129, 478, 463); crt.sel = [this] { return sel; }; crt.pick = [this](int m) { show(m); }; crt.isOn = [this](int m) { return on(m); }; crt.step = [this](int d) { auto o = presetOrder(); int n = (int)o.size(), k = 0; for (int i = 0; i < n; ++i) if (o[(size_t)i] == p.getCurrentProgram()) k = i; p.loadPreset(o[(size_t)((k + d + n) % n)]); syncPads(); }; crt.presetMenu = [this] { PopupMenu m; String cur; PopupMenu sub; bool has = false; auto flush = [&] { if (cur.isNotEmpty()) m.addSubMenu(cur, sub, true, nullptr, has); sub = PopupMenu(); has = false; }; for (int i : presetOrder()) { if (cur != factory[i].cat) { flush(); cur = factory[i].cat; } sub.addItem(i + 1, factory[i].name, true, i == p.getCurrentProgram()); has |= i == p.getCurrentProgram(); } flush(); styled(m, &crt); m.showMenuAsync(PopupMenu::Options().withTargetComponent(crt), [this](int x) { if (x > 0) { p.loadPreset(x - 1); syncPads(); } }); };
         static const int order[20] = { 0,1,2,3,4,5,6,7,8,9, 10,11,12,13,14, 15,16,17,18,19 };
         for (int i = 0; i < 20; ++i) { int m = order[i]; auto k = std::make_unique<Key>(); k->label = ms[(size_t)m].key; k->utility = m >= numModules; k->hasLed = m < numModules || m == 16 || m == 17 || m == 18; k->select = [this, m] { show(m); }; if (m < numModules) k->toggle = [this, m] { toggle(m); };
             int row = i / 10, col = i % 10; k->setBounds(72 + col * 116 + (row == 1 && col >= 5 ? 10 : 0), 696 + row * 98, 106, 92); addAndMakeVisible(*k); keys.push_back(std::move(k)); }
