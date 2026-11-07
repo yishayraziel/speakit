@@ -73,7 +73,7 @@ struct BatCell : Component { Bat b; String title; std::unique_ptr<BA> att; BatCe
     void resized() override { b.setBounds(getLocalBounds().withTrimmedTop(34).withSizeKeepingCentre(jmin(getWidth(), 130), jmin(getHeight() - 34, 110))); }
     void paint(Graphics& g) override { g.setColour(ink); g.setFont(bar(28)); g.drawText(title, 0, 0, getWidth(), 30, Justification::centred); } };
 // Green screen box for long choice lists (IRs, codecs, targets). Wide boxes get arrows to step through.
-struct Lcd : Component { AudioParameterChoice* c; String title; bool wide; const IrInfo* ir = nullptr;
+struct Lcd : Component { AudioParameterChoice* c; String title; bool wide; const IrInfo* ir = nullptr; int shown = -1; void refresh() { if (c->getIndex() != shown) { shown = c->getIndex(); repaint(); } }
     Lcd(AudioProcessorValueTreeState& st, const String& id, const String& t, bool w) : c(dynamic_cast<AudioParameterChoice*>(st.getParameter(id))), title(t), wide(w) {}
     bool inl() const { return !wide && getHeight() < 140; }
     Rectangle<float> box() const { if (inl()) return getLocalBounds().toFloat().withTrimmedTop(30).reduced(4, 0).withSizeKeepingCentre((float)getWidth() - 8, 50); return wide ? getLocalBounds().toFloat().withTrimmedLeft(170).reduced(0, 4) : getLocalBounds().toFloat().withTrimmedTop(34).withSizeKeepingCentre(jmin((float)getWidth() - 8, 260.f), 54); }
@@ -114,6 +114,7 @@ constexpr int numModules = 15;
 struct Panel { static Rectangle<int> content() { return { 650, 150, 970, 470 }; } };
 // One page in the right panel. Built from the parameter types.
 struct Page : Component {
+    void refresh() { for (auto& c : ctl) if (auto* l = dynamic_cast<Lcd*>(c.get())) l->refresh(); }
     std::vector<std::unique_ptr<Component>> ctl; Lcd* top = nullptr; int cols;
     Page(SpeakitProcessor& p, const ModuleInfo& m) : cols(m.cols) { for (auto& d : m.ctl) { auto* pr = p.apvts.getParameter(d.id); jassert(pr != nullptr); std::unique_ptr<Component> c;
             if (auto* ch = dynamic_cast<AudioParameterChoice*>(pr)) { if (ch->choices.size() > 4) { bool wide = m.ir != nullptr || String(d.id) == "codec"; auto l = std::make_unique<Lcd>(p.apvts, d.id, d.label, wide); l->ir = m.ir; if (wide) top = l.get(); c = std::move(l); } else c = std::make_unique<CreamKnob>(p.apvts, d.id, d.label); }
@@ -142,10 +143,10 @@ struct Flat : Button { String tx; bool lit = false; Flat(String t) : Button(t), 
 }
 
 // The screen: name, version, preset browser, live signal chain, scope or drive curve, meters.
-struct Crt : Component { SpeakitProcessor& p; std::function<int()> sel; std::function<void(int)> pick; std::function<bool(int)> isOn; std::function<void(int)> step; std::function<void()> presetMenu; GlowEffect glow; std::vector<std::pair<Rectangle<float>, int>> hits; Rectangle<float> prevR, nextR, nameR;
-    Crt(SpeakitProcessor& q) : p(q) { glow.setGlowProperties(5.f, phos.withAlpha(.35f)); setComponentEffect(&glow); }
+struct Crt : Component { SpeakitProcessor& p; std::function<int()> sel; std::function<void(int)> pick; std::function<bool(int)> isOn; std::function<void(int)> step; std::function<void()> presetMenu; std::vector<std::pair<Rectangle<float>, int>> hits; Rectangle<float> prevR, nextR, nameR;
+    Image bg = img("chassis_jpg"); Crt(SpeakitProcessor& q) : p(q) { setOpaque(true); }
     void mouseDown(const MouseEvent& e) override { for (auto& h : hits) if (h.first.contains(e.position)) { pick(h.second); return; } if (prevR.contains(e.position)) step(-1); else if (nextR.contains(e.position)) step(1); else if (nameR.contains(e.position)) presetMenu(); }
-    void paint(Graphics& g) override { auto full = getLocalBounds().toFloat(); auto r = full.reduced(30, 24); hits.clear();
+    void paint(Graphics& g) override { auto full = getLocalBounds().toFloat(); auto r = full.reduced(30, 24); hits.clear(); g.drawImage(bg, 0, 0, getWidth(), getHeight(), 87, 129, getWidth(), getHeight());
         g.setColour(phos); g.setFont(vt(64)); g.drawText("Anal-Log", r.getX(), r.getY() - 8, 300, 60, Justification::centredLeft); g.setFont(vt(26)); g.setColour(phos.withAlpha(.8f)); g.drawText("v" + String(JucePlugin_VersionString), r.getRight() - 120, r.getY() + 10, 120, 26, Justification::centredRight);
         g.drawText("by Yishay Raziel", r.getRight() - 200, r.getY() + 34, 200, 24, Justification::centredRight);
         float y = r.getY() + 58; g.setColour(phos.withAlpha(.6f)); g.fillRect(r.getX(), y, r.getWidth(), 2.f); y += 12;
@@ -208,7 +209,10 @@ struct SpeakitEditor::Impl : Component {
             if (keys[i]->lit != lit || keys[i]->selected != (m == sel)) { keys[i]->lit = lit; keys[i]->selected = m == sel; keys[i]->repaint(); } }
         if (sel == 4) moduleSw.setToggleState(on(4), dontSendNotification); bool active = sel >= numModules ? (sel != 18 || V("bayOn") > .5f) : on(sel); float a = active ? 1.f : .42f; if (sel < (int)pages.size() && pages[(size_t)sel] && pages[(size_t)sel]->getAlpha() != a) pages[(size_t)sel]->setAlpha(a);
         for (int i = 0; i < (int)snaps.size(); ++i) { bool l = p.hasSnap(i), s = i == p.snapNow; if (snaps[(size_t)i]->lit != l || snaps[(size_t)i]->selected != s) { snaps[(size_t)i]->lit = l; snaps[(size_t)i]->selected = s; snaps[(size_t)i]->repaint(); } }
-        if (sel == 18) for (auto& s : pads[p.bankShown.load()]) s->repaint(); crt.repaint(); wet->repaint(); (void)ms; }
+        if (sel == 18) for (auto& s : pads[p.bankShown.load()]) s->repaint(); crt.repaint(); (void)ms;
+        if (sel < (int)pages.size() && pages[(size_t)sel]) if (auto* pg = dynamic_cast<Page*>(pages[(size_t)sel].get())) pg->refresh();
+        int hs = modules()[(size_t)sel].onId ? (sel == 4 ? on(4) : V(modules()[(size_t)sel].onId) > .5f) : -1; if (hs != headerOn) { headerOn = hs; repaint(1340, 60, 150, 80); } }
+    int headerOn = -2;
     void paint(Graphics& g) override { g.drawImage(chassis, getLocalBounds().toFloat()); auto& m = modules()[(size_t)sel];
         g.setColour(ink); g.setFont(bar(54)); g.drawText(m.title, 650, 62, 760, 56, Justification::centredLeft); g.setColour(dimInk); g.setFont(bar(25, false)); g.drawText(m.stage, 652, 112, 760, 26, Justification::centredLeft);
         g.setColour(orange); g.fillRect(650.f, 144.f, 970.f, 3.f); g.setColour(amber); g.fillRect(650.f, 150.f, 970.f, 2.f);
