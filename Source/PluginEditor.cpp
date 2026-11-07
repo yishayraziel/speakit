@@ -36,6 +36,10 @@ struct Lnf : LookAndFeel_V4 {
         g.drawImage(knob, Rectangle<float>(cx - r, cy - r, r * 2, r * 2), RectanglePlacement::stretchToFit);
         float a = a0 + pos * (a1 - a0); Path p; p.addRoundedRectangle(-r * .05f, -r * .9f, r * .1f, r * .62f, r * .04f); g.setColour(Colour(0xff26221c)); g.fillPath(p, AffineTransform::rotation(a).translated(cx, cy)); }
     Font getPopupMenuFont() override { return bar(menuFont, false); }
+    Rectangle<int> getTooltipBounds(const String& tip, Point<int> pos, Rectangle<int> parent) override { AttributedString s; s.append(tip, bar(24, false)); TextLayout tl; tl.createLayout(s, 420.f); int w = (int)tl.getWidth() + 28, h = (int)tl.getHeight() + 20;
+        return Rectangle<int>(pos.x > parent.getCentreX() ? pos.x - w - 12 : pos.x + 18, pos.y > parent.getCentreY() ? pos.y - h - 8 : pos.y + 18, w, h).constrainedWithin(parent); }
+    void drawTooltip(Graphics& g, const String& tip, int w, int h) override { auto b = Rectangle<float>((float)w, (float)h); g.setColour(Colour(0xf0121512)); g.fillRoundedRectangle(b, 6); g.setColour(phosDim.brighter(.4f)); g.drawRoundedRectangle(b.reduced(1), 6, 1.5f);
+        AttributedString s; s.append(tip, bar(24, false), Colour(0xffd8ffd9)); TextLayout tl; tl.createLayout(s, (float)w - 28); tl.draw(g, b.reduced(14, 10)); }
     int getPopupMenuBorderSize() override { return roundToInt(menuFont * .4f); }
     void drawPopupMenuBackground(Graphics& g, int, int) override { g.fillAll(Colour(0xff121512)); }
     void drawPopupMenuItem(Graphics& g, const Rectangle<int>& area, bool sep, bool active, bool hl, bool ticked, bool sub, const String& text, const String& sc, const Drawable* icon, const Colour* col) override {
@@ -73,9 +77,11 @@ struct Bat : ToggleButton { Image on = img("switch_on_png"), off = img("switch_o
         float nx = im.getX() + S * (st ? .49f : .51f), half = S * .3f; g.setFont(bar(20));
         g.setColour(st ? dimInk : ink); g.drawText("OFF", Rectangle<float>(nx - half - 50, b.getBottom() - 24, 50, 22), Justification::centredRight); g.setColour(st ? ink : dimInk); g.drawText("ON", Rectangle<float>(nx + half, b.getBottom() - 24, 50, 22), Justification::centredLeft); } };
 
-struct BatCell : Component { Bat b; String title; std::unique_ptr<BA> att; BatCell(AudioProcessorValueTreeState& st, const String& id, const String& t) : title(t) { addAndMakeVisible(b); att = std::make_unique<BA>(st, id, b); }
-    void resized() override { b.setBounds(getLocalBounds().withTrimmedTop(34).withSizeKeepingCentre(jmin(getWidth(), 130), jmin(getHeight() - 34, 110))); }
-    void paint(Graphics& g) override { float th = getHeight() < 210 ? 24.f : 28.f; g.setColour(ink); g.setFont(bar(th)); g.drawText(title, 0, 0, getWidth(), (int)th, Justification::centred); } };
+struct BatCell : Component { Bat b; String title, sub; std::unique_ptr<BA> att; BatCell(AudioProcessorValueTreeState& st, const String& id, const String& t) : title(t) { addAndMakeVisible(b); att = std::make_unique<BA>(st, id, b); }
+    int top() const { return 34 + (sub.isNotEmpty() ? 20 : 0); }
+    void resized() override { b.setBounds(getLocalBounds().withTrimmedTop(top()).withSizeKeepingCentre(jmin(getWidth(), 130), jmin(getHeight() - top(), 110))); }
+    void paint(Graphics& g) override { float th = getHeight() < 210 ? 24.f : 28.f; g.setColour(ink); g.setFont(bar(th)); g.drawText(title, 0, 0, getWidth(), (int)th, Justification::centred);
+        if (sub.isNotEmpty()) { g.setColour(dimInk.brighter(.3f)); g.setFont(bar(18, false)); g.drawText(sub, 0, (int)th, getWidth(), 20, Justification::centred); } } };
 // Green screen box for long choice lists (IRs, codecs, targets). Wide boxes get arrows to step through.
 struct Lcd : Component { AudioParameterChoice* c; String title; bool wide; const IrInfo* ir = nullptr; int shown = -1; void refresh() { if (c->getIndex() != shown) { shown = c->getIndex(); repaint(); } }
     Lcd(AudioProcessorValueTreeState& st, const String& id, const String& t, bool w) : c(dynamic_cast<AudioParameterChoice*>(st.getParameter(id))), title(t), wide(w) {}
@@ -90,6 +96,29 @@ struct Lcd : Component { AudioParameterChoice* c; String title; bool wide; const
         else { g.setFont(vt(34)); g.drawFittedText(t + "  v", b.reduced(10, 0).toNearestInt(), Justification::centred, 1, .7f); } } };
 
 struct Def { const char* id; const char* label; };
+struct Help { const char* id; const char* sub; const char* tip; };
+const Help* help(const String& id) { static const Help h[] = {
+    { "crushAA", "FILTER BEFORE CRUSH", "Low-pass before the sample rate is lowered, set to the SAMPLE RATE. Removes the metallic aliasing: clean, old-sampler sound." },
+    { "crushSmooth", "FILTER AFTER CRUSH", "Low-pass after the sample rate is lowered. Rounds off the steps between samples, like the output filter of an old converter." },
+    { "crushGain", nullptr, "How hard the signal hits the crusher. The level is taken back off afterwards." },
+    { "crushBits", nullptr, "Bit depth. Fewer bits = more grit and noise." },
+    { "crushRate", nullptr, "Sample rate. Lower = more aliasing and less top end. 48k = off." },
+    { "crush", nullptr, "Macro: lowers bits and sample rate together. Used by presets and the LFOs." },
+    { "crushQuant", nullptr, "LINEAR: plain bit reduction. MU-LAW: telephone-style, quiet parts survive better." },
+    { "crushJit", nullptr, "Unstable sample clock, like cheap digital hardware." },
+    { "crushDither", nullptr, "Adds a little noise that smooths the bit steps." },
+    { "crushFilt", nullptr, "Extra filter: low-pass, high-pass or band-pass." },
+    { "crushPos", nullptr, "PRE: filter before the crusher. POST: after it." },
+    { "driveLink", "OUTPUT FOLLOWS DRIVE", "Turns the output down as the drive goes up, so the level stays even." },
+    { "driveBias", nullptr, "Shifts the curve off centre: adds even harmonics, like a tube." },
+    { "driveAsym", nullptr, "Clips one side of the wave harder than the other." },
+    { "driveTone", nullptr, "Low-pass after the distortion." },
+    { "driveHpf", nullptr, "High-pass before the distortion. Keeps the lows from turning to mud." },
+    { "muteStop", "SILENT WHEN STOPPED", "Mutes the backgrounds and tails when the transport stops." },
+    { "limiter", "NEVER OVER 0 dB", "Safety limiter at the very end of the chain." },
+    { "bayDuck", "QUIETER WHEN VOICE PLAYS", "Turns the Sample Bay down while the input is above the threshold." },
+    { "modSync", "LOCK TO TEMPO", nullptr }, { "delaySync", "LOCK TO TEMPO", nullptr } };
+    for (auto& x : h) if (id == x.id) return &x; return nullptr; }
 struct ModuleInfo { const char* key; const char* title; const char* stage; const char* onId; std::vector<Def> ctl; int cols; const IrInfo* ir; const char* crt; };
 const std::vector<ModuleInfo>& modules() { static const std::vector<ModuleInfo> m = {
     { "GATE", "GATE", "STAGE 1  PREPARE", "gateOn", { {"gate","THRESHOLD"},{"gateRange","RANGE"},{"gateRel","RELEASE"} }, 3, nullptr, "GATE" },
@@ -123,6 +152,7 @@ struct Page : Component {
     Page(SpeakitProcessor& p, const ModuleInfo& m) : cols(m.cols) { for (auto& d : m.ctl) { auto* pr = p.apvts.getParameter(d.id); jassert(pr != nullptr); std::unique_ptr<Component> c;
             if (auto* ch = dynamic_cast<AudioParameterChoice*>(pr)) { if (ch->choices.size() > 4) { bool wide = m.ir != nullptr || String(d.id) == "codec"; auto l = std::make_unique<Lcd>(p.apvts, d.id, d.label, wide); l->ir = m.ir; if (wide) top = l.get(); c = std::move(l); } else c = std::make_unique<CreamKnob>(p.apvts, d.id, d.label); }
             else if (dynamic_cast<AudioParameterBool*>(pr)) c = std::make_unique<BatCell>(p.apvts, d.id, d.label); else c = std::make_unique<CreamKnob>(p.apvts, d.id, d.label);
+            if (auto* hp = help(d.id)) { if (auto* bc = dynamic_cast<BatCell*>(c.get())) { if (hp->sub) bc->sub = hp->sub; if (hp->tip) bc->b.setTooltip(hp->tip); } else if (auto* ck = dynamic_cast<CreamKnob*>(c.get())) { if (hp->tip) ck->s.setTooltip(hp->tip); } }
             addAndMakeVisible(*c); ctl.push_back(std::move(c)); } }
     void resized() override { auto r = getLocalBounds(); if (top) { top->setBounds(r.removeFromTop(86)); r.removeFromTop(18); } std::vector<Component*> rest; for (auto& c : ctl) if (c.get() != top) rest.push_back(c.get()); if (rest.empty()) return;
         int n = (int)rest.size(), cc = jmax(1, jmin(cols, n)), rows = (n + cc - 1) / cc; int cw = r.getWidth() / jmax(cc, 2), rh = jmin(r.getHeight() / rows, 260);
@@ -181,7 +211,7 @@ struct Crt : Component { SpeakitProcessor& p; std::function<int()> sel; std::fun
         for (float sy = 0; sy < full.getHeight(); sy += 4) { g.setColour(Colours::black.withAlpha(.13f)); g.fillRect(0.f, sy, full.getWidth(), 1.5f); } } };
 
 struct SpeakitEditor::Impl : Component {
-    SpeakitProcessor& p; Lnf lnf; Image chassis = img("chassis_jpg"); int sel = 3; Crt crt; std::vector<std::unique_ptr<Key>> keys; std::vector<std::unique_ptr<Component>> pages; Bat moduleSw; std::unique_ptr<BA> moduleAtt; std::unique_ptr<CreamKnob> wet; Bat bypass; std::unique_ptr<BA> bypassAtt;
+    SpeakitProcessor& p; Lnf lnf; TooltipWindow tips { this, 500 }; Image chassis = img("chassis_jpg"); int sel = 3; Crt crt; std::vector<std::unique_ptr<Key>> keys; std::vector<std::unique_ptr<Component>> pages; Bat moduleSw; std::unique_ptr<BA> moduleAtt; std::unique_ptr<CreamKnob> wet; Bat bypass; std::unique_ptr<BA> bypassAtt;
     std::unique_ptr<Pad> pads[5][12]; Flat bankB[5] { Flat(bayBanks[0]), Flat(bayBanks[1]), Flat(bayBanks[2]), Flat(bayBanks[3]), Flat(bayBanks[4]) }; Flat prePost { "POST" }; std::unique_ptr<CreamKnob> bayGain, bayThr; std::unique_ptr<BatCell> bayDuck; std::vector<std::unique_ptr<Key>> snaps; Component samplesPage, memoryPage;
     float V(const char* id) { return *p.apvts.getRawParameterValue(id); }
     bool on(int m) { if (m == 4) return V("telOn") > .5f && V("codec") > .5f; auto* id = modules()[(size_t)m].onId; return id && V(id) > .5f; }
@@ -199,7 +229,7 @@ struct SpeakitEditor::Impl : Component {
         samplesPage.setBounds(Panel::content()); addChildComponent(samplesPage); for (int b = 0; b < 5; ++b) { samplesPage.addAndMakeVisible(bankB[b]); bankB[b].setBounds(b * 136, 0, 128, 52); bankB[b].onClick = [this, b] { p.bankShown = b; showBank(); };
             for (int s = 0; s < 12; ++s) { pads[b][s] = std::make_unique<Pad>(p, b, s); pads[b][s]->setBounds((s % 4) * 242, 64 + (s / 4) * 92, 240, 88); samplesPage.addChildComponent(*pads[b][s]); } }
         samplesPage.addAndMakeVisible(prePost); prePost.setBounds(700, 0, 270, 52); prePost.onClick = [this] { int b = p.bankShown; p.bankPre[b] = !p.bankPre[b].load(); showBank(); };
-        bayGain = std::make_unique<CreamKnob>(p.apvts, "bayGain", "GAIN"); bayGain->setBounds(80, 340, 230, 130); bayDuck = std::make_unique<BatCell>(p.apvts, "bayDuck", "DUCK UNDER VOICE"); bayDuck->setBounds(380, 344, 220, 120); bayThr = std::make_unique<CreamKnob>(p.apvts, "bayThr", "DUCK THRESHOLD"); bayThr->setBounds(660, 340, 230, 130);
+        bayGain = std::make_unique<CreamKnob>(p.apvts, "bayGain", "GAIN"); bayGain->setBounds(80, 340, 230, 130); bayDuck = std::make_unique<BatCell>(p.apvts, "bayDuck", "DUCK UNDER VOICE"); bayDuck->b.setTooltip(help("bayDuck")->tip); bayDuck->setBounds(380, 344, 220, 120); bayThr = std::make_unique<CreamKnob>(p.apvts, "bayThr", "DUCK THRESHOLD"); bayThr->setBounds(660, 340, 230, 130);
         for (auto* c : std::initializer_list<Component*> { bayGain.get(), bayDuck.get(), bayThr.get() }) samplesPage.addAndMakeVisible(c);
         // memory page
         memoryPage.setBounds(Panel::content()); addChildComponent(memoryPage); for (int i = 0; i < 10; ++i) { auto k = std::make_unique<Key>(); k->label = String(i + 1); k->select = [this, i] { if (ModifierKeys::getCurrentModifiers().isShiftDown() || !p.hasSnap(i)) p.storeSnap(i); else p.recallSnap(i); }; k->setBounds(70 + (i % 5) * 170, 40 + (i / 5) * 150, 150, 132); memoryPage.addAndMakeVisible(*k); snaps.push_back(std::move(k)); }
