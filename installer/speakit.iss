@@ -8,9 +8,9 @@
 AppId={{3E9B7C21-5A4D-4F80-B6E2-91C0D47A8F15}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher=YRAZIEL
+AppPublisher=Yishay Raziel
 AppPublisherURL=https://yraziel.com
-DefaultDirName={autopf}\YRAZIEL\Anal-Log
+DefaultDirName={autopf}\Yishay Raziel\Anal-Log
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
