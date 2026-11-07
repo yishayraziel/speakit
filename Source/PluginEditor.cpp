@@ -19,6 +19,7 @@ String fmt(RangedAudioParameter* p, float v, bool shortForm) {
     if (u == "dB") { if (shortForm) { int i = (int)std::round(v); return (i > 0 ? "+" : "") + String(i); } return (v > .05f ? "+" : "") + String(v, 1) + " dB"; }
     if (u == "Hz") { if (v >= 1000) { float k = v / 1000; String s = std::abs(k - std::round(k)) < .05f ? String((int)std::round(k)) : String(k, 1); return shortForm ? s + "k" : s + " kHz"; }
         if (shortForm) return v < 1 ? String(v, 2) : v < 10 ? String(v, 1) : String((int)std::round(v)); return (v < 10 ? String(v, 2) : v < 100 ? String(v, 1) : String((int)std::round(v))) + " Hz"; }
+    if (u == "bit") { int b = (int)std::round(v); return String(b) + (shortForm ? "" : b == 1 ? " bit" : " bits"); }
     if (u == "ms") return String((int)std::round(v)) + (shortForm ? "" : " ms");
     if (u == "st") return (v > .5f ? "+" : "") + String((int)std::round(v)) + (shortForm ? "" : " st");
     if (r.start >= 0 && r.end <= 1.0001f) return String((int)std::round(v * 100)) + (shortForm ? "" : " %");
@@ -67,12 +68,14 @@ struct CreamKnob : Component {
 // Bat-handle toggle with OFF / ON engraved beside it.
 // Bat-handle toggle: photographed switch (mirrored for OFF), OFF / ON engraved beside it.
 struct Bat : ToggleButton { Image on = img("switch_on_png"), off = img("switch_off_png");
-    void paintButton(Graphics& g, bool, bool) override { auto b = getLocalBounds().toFloat(); float cx = b.getCentreX(), cy = b.getCentreY() - 6, r = jmin(b.getWidth() / 7.8f, b.getHeight() * .2f); bool st = getToggleState();
-        float S = r * 2.9f / .58f; float ox = st ? .49f : .51f; g.drawImage(st ? on : off, Rectangle<float>(cx - S * ox, cy - S * .57f, S, S), RectanglePlacement::stretchToFit);
-        g.setFont(bar(20)); g.setColour(st ? dimInk : ink); g.drawText("OFF", Rectangle<float>(cx - r * 3.6f, cy + r * 1.5f, r * 2.4f, 22), Justification::centred); g.setColour(st ? ink : dimInk); g.drawText("ON", Rectangle<float>(cx + r * 1.2f, cy + r * 1.5f, r * 2.4f, 22), Justification::centred); } };
+    void paintButton(Graphics& g, bool, bool) override { auto b = getLocalBounds().toFloat(); bool st = getToggleState(); auto area = b.withTrimmedBottom(24);
+        float S = jmin(area.getHeight(), area.getWidth() * .62f); auto im = Rectangle<float>(S, S).withCentre(area.getCentre()); g.drawImage(st ? on : off, im, RectanglePlacement::stretchToFit);
+        float nx = im.getX() + S * (st ? .49f : .51f), half = S * .3f; g.setFont(bar(20));
+        g.setColour(st ? dimInk : ink); g.drawText("OFF", Rectangle<float>(nx - half - 50, b.getBottom() - 24, 50, 22), Justification::centredRight); g.setColour(st ? ink : dimInk); g.drawText("ON", Rectangle<float>(nx + half, b.getBottom() - 24, 50, 22), Justification::centredLeft); } };
+
 struct BatCell : Component { Bat b; String title; std::unique_ptr<BA> att; BatCell(AudioProcessorValueTreeState& st, const String& id, const String& t) : title(t) { addAndMakeVisible(b); att = std::make_unique<BA>(st, id, b); }
     void resized() override { b.setBounds(getLocalBounds().withTrimmedTop(34).withSizeKeepingCentre(jmin(getWidth(), 130), jmin(getHeight() - 34, 110))); }
-    void paint(Graphics& g) override { g.setColour(ink); g.setFont(bar(28)); g.drawText(title, 0, 0, getWidth(), 30, Justification::centred); } };
+    void paint(Graphics& g) override { float th = getHeight() < 210 ? 24.f : 28.f; g.setColour(ink); g.setFont(bar(th)); g.drawText(title, 0, 0, getWidth(), (int)th, Justification::centred); } };
 // Green screen box for long choice lists (IRs, codecs, targets). Wide boxes get arrows to step through.
 struct Lcd : Component { AudioParameterChoice* c; String title; bool wide; const IrInfo* ir = nullptr; int shown = -1; void refresh() { if (c->getIndex() != shown) { shown = c->getIndex(); repaint(); } }
     Lcd(AudioProcessorValueTreeState& st, const String& id, const String& t, bool w) : c(dynamic_cast<AudioParameterChoice*>(st.getParameter(id))), title(t), wide(w) {}
@@ -94,7 +97,7 @@ const std::vector<ModuleInfo>& modules() { static const std::vector<ModuleInfo> 
     { "EQ", "EQUALIZER", "STAGE 1  PREPARE", "eqOn", { {"eq","NARROW"},{"eqHp","HPF"},{"eqLp","LPF"},{"eqLoF","LOW FREQ"},{"eqLoG","LOW GAIN"},{"eqHiF","HIGH FREQ"},{"eqHiG","HIGH GAIN"},{"eqP1F","PEAK 1"},{"eqP1G","P1 GAIN"},{"eqP1Q","P1 Q"},{"eqP2F","PEAK 2"},{"eqP2G","P2 GAIN"},{"eqP2Q","P2 Q"} }, 5, nullptr, "EQ" },
     { "DRIVE", "DRIVE", "STAGE 2  TRANSMIT", "driveOn", { {"drive","DRIVE"},{"driveTone","TONE"},{"drivePost","OUTPUT"},{"driveMix","MIX"},{"driveType","TYPE"},{"driveBias","BIAS"},{"driveAsym","ASYM"},{"driveHpf","HPF"},{"preEqLp","LPF"},{"driveLink","LINK"},{"driveCurve","CURVE"},{"preEqF","PRE EQ FREQ"},{"preEqG","PRE EQ GAIN"},{"preEqQ","PRE EQ Q"} }, 5, nullptr, "DRIVE" },
     { "TELECOM", "TELECOM", "STAGE 2  TRANSMIT", "telOn", { {"codec","CODEC"},{"line","DAMAGE"},{"telMix","MIX"} }, 2, nullptr, "TEL" },
-    { "CRUSH", "CRUSH", "STAGE 2  TRANSMIT", "crushOn", { {"crush","AMOUNT"} }, 1, nullptr, "CRUSH" },
+    { "CRUSH", "CRUSH", "STAGE 2  TRANSMIT", "crushOn", { {"crushGain","GAIN"},{"crushBits","BITS"},{"crushRate","SAMPLE RATE"},{"crush","AMOUNT"},{"crushMix","MIX"},{"crushQuant","QUANTIZER"},{"crushJit","JITTER"},{"crushDither","DITHER"},{"crushAA","ANTI-ALIAS"},{"crushSmooth","SMOOTH"},{"crushFilt","FILTER"},{"crushCut","CUTOFF"},{"crushRes","RESONANCE"},{"crushPos","FILTER POS"} }, 5, nullptr, "CRUSH" },
     { "MOD", "MODULATION FX", "STAGE 2  TRANSMIT", "modOn", { {"modType","TYPE"},{"modDepth","DEPTH"},{"modSpeed","SPEED"},{"modSync","SYNC"},{"modDiv","NOTE"} }, 5, nullptr, "MOD" },
     { "PHONO", "PHONOGRAPH", "STAGE 2  TRANSMIT", "gramOn", { {"gramWow","WOW"},{"gramCurve","WARP"},{"gramTicks","TICKS"},{"gramGain","GAIN"} }, 4, nullptr, "PHONO" },
     { "TUNING", "RADIO TUNING", "STAGE 2  TRANSMIT", "tuneOn", { {"tuneX","OFF STATION"},{"tuneY","WHISTLE"},{"tuneMode","BAND"} }, 3, nullptr, "TUNE" },

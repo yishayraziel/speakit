@@ -14,6 +14,7 @@ struct Biquad { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1[2] {}, z2[2] {}
     void set(float nb0, float nb1, float nb2, float a0, float na1, float na2) { b0 = nb0 / a0; b1 = nb1 / a0; b2 = nb2 / a0; a1 = na1 / a0; a2 = na2 / a0; }
     void lp(float f, float q, float sr) { float w = twoPi * juce::jmin(f, sr * .45f) / sr, a = std::sin(w) / (2 * q), c = std::cos(w); set((1 - c) / 2, 1 - c, (1 - c) / 2, 1 + a, -2 * c, 1 - a); }
     void hp(float f, float q, float sr) { float w = twoPi * juce::jmin(f, sr * .45f) / sr, a = std::sin(w) / (2 * q), c = std::cos(w); set((1 + c) / 2, -1 - c, (1 + c) / 2, 1 + a, -2 * c, 1 - a); }
+    void bp(float f, float q, float sr) { float w = twoPi * juce::jmin(f, sr * .45f) / sr, a = std::sin(w) / (2 * q), c = std::cos(w); set(a, 0, -a, 1 + a, -2 * c, 1 - a); }
     void peak(float f, float q, float db, float sr) { float A = std::pow(10.f, db / 40), w = twoPi * juce::jmin(f, sr * .45f) / sr, a = std::sin(w) / (2 * q), c = std::cos(w); set(1 + a * A, -2 * c, 1 - a * A, 1 + a / A, -2 * c, 1 - a / A); }
     void lshelf(float f, float db, float sr) { float A = std::pow(10.f, db / 40), w = twoPi * f / sr, c = std::cos(w), s = std::sin(w) / 2 * std::sqrt(2.f), r = 2 * std::sqrt(A) * s;
         set(A * ((A + 1) - (A - 1) * c + r), 2 * A * ((A - 1) - (A + 1) * c), A * ((A + 1) - (A - 1) * c - r), (A + 1) + (A - 1) * c + r, -2 * ((A - 1) + (A + 1) * c), (A + 1) + (A - 1) * c - r); }
@@ -56,7 +57,21 @@ struct Drive { std::unique_ptr<juce::dsp::Oversampling<float>> os; Biquad preP, 
         for (int c = 0; c < 2; ++c) { auto* d = u.getChannelPointer((size_t)c); for (int i = 0; i < un; ++i) { float pdb = pre[c].next(preDb[(i / 4) >> 5]); float g = db2g(pdb); float x = d[i] * g + bs; x *= x >= 0 ? ap : an; float y = shape(x, type, curve) * db2g(postDb - (link ? pdb * .7f : 0.f)); float o = y - dcx[c] + .9995f * dcy[c]; dcx[c] = y; dcy[c] = o; d[i] = o; } }
         os->processSamplesDown(b); const bool useTone = toneHz < 15900.f;
         for (int i = 0; i < n; ++i) { dl.push(L[i]); dr.push(R[i]); float m = mixS.next(mix[i >> 5]); float a = useTone ? tone.tick(ch[0][i], 0) : ch[0][i], c2 = useTone ? tone.tick(ch[1][i], 1) : ch[1][i]; L[i] = dl.at((float)lat) * (1 - m) + a * m; R[i] = dr.at((float)lat) * (1 - m) + c2 * m; } } };
-struct Crush { float hL = 0, hR = 0, ph = 0; void process(float* L, float* R, int n, const float* mix, const float* amt) { for (int i = 0; i < n; ++i) { float a = amt[i >> 5], m = mix[i >> 5]; float bits = 16 - a * 13, step = std::pow(2.f, 1 - bits), hold = 1 + a * a * 40; ph += 1; if (ph >= hold) { ph -= hold; hL = std::round(L[i] / step) * step; hR = std::round(R[i] / step) * step; } L[i] += (hL - L[i]) * m; R[i] += (hR - R[i]) * m; } } };
+// Bit and sample-rate reduction. AMOUNT is a macro on top of the explicit BITS and RATE (defaults leave them out).
+struct Crush { float hL = 0, hR = 0, ph = 1, fRate = -1, fKey = -1; Biquad sm, aa, flt; double sr = 48000; juce::Random r { 7 };
+    void prepare(double s) { sr = s; clear(); } void clear() { hL = hR = 0; ph = 1; fRate = fKey = -1; sm.reset(); aa.reset(); flt.reset(); }
+    static float mu(float x) { x = juce::jlimit(-1.f, 1.f, x); return std::copysign(std::log1p(255.f * std::abs(x)) / std::log(256.f), x); }
+    static float unmu(float y) { return std::copysign((std::pow(256.f, std::abs(y)) - 1) / 255.f, y); }
+    // Filter: type 0 off, 1 LP, 2 HP, 3 BP; placed before (pre) or after (post) the crusher. gainDb drives the input and is taken back off after.
+    void process(float* L, float* R, int n, const float* mix, const float* amt, float bitsK, float rateK, float jit, float dith, int quant, bool smooth, bool anti, float gainDb, int ft, float fc, float fq, bool fPost) {
+        float gi = db2g(gainDb), go = 1 / gi; float key = ft * 1e6f + fc + fq * 1e-3f; if (ft && key != fKey) { fKey = key; float q = .5f + fq * 11.5f; if (ft == 1) flt.lp(fc, q, (float)sr); else if (ft == 2) flt.hp(fc, q, (float)sr); else flt.bp(fc, q, (float)sr); }
+        float base = rateK >= 47900 ? (float)sr : juce::jmin(rateK, (float)sr), bits = 16, step = 1, rate = base;
+        for (int i = 0; i < n; ++i) { if ((i & 31) == 0) { float a = amt[i >> 5]; bits = juce::jmax(1.f, bitsK - a * 13); step = std::pow(2.f, 1 - bits); rate = base / (1 + a * a * 40);
+                if ((smooth || anti) && std::abs(rate - fRate) > fRate * .01f) { fRate = rate; float fh = juce::jmin(rate * .45f, (float)sr * .45f); sm.lp(fh, .707f, (float)sr); aa.lp(fh, .707f, (float)sr); } }
+            float m = mix[i >> 5], dL = L[i], dR = R[i], xL = dL * gi, xR = dR * gi; if (ft && !fPost) { xL = flt.tick(xL, 0); xR = flt.tick(xR, 1); } if (anti) { xL = aa.tick(xL, 0); xR = aa.tick(xR, 1); } ph += rate / (float)sr * (1 + jit * .9f * (r.nextFloat() * 2 - 1));
+            if (ph >= 1) { ph -= std::floor(ph); float d = dith * step * (r.nextFloat() - r.nextFloat());
+                auto q = [&](float x) { if (quant == 1) return unmu(std::round((mu(x) + d) / step) * step); return std::round((x + d) / step) * step; }; hL = q(xL); hR = q(xR); }
+            float yL = hL, yR = hR; if (smooth) { yL = sm.tick(yL, 0); yR = sm.tick(yR, 1); } if (ft && fPost) { yL = flt.tick(yL, 0); yR = flt.tick(yR, 1); } yL *= go; yR *= go; L[i] = dL + (yL - dL) * m; R[i] = dR + (yR - dR) * m; } } };
 enum ModType { mTremolo, mChorus, mPhaser, mFlanger, mVibrato };
 struct Mod { Delay d[2]; float ph = 0, ap[2][4] {}, fb[2] {}; double sr = 48000; void clear() { d[0].clear(); d[1].clear(); std::fill(&ap[0][0], &ap[0][0] + 8, 0.f); fb[0] = fb[1] = 0; } void prepare(double s) { sr = s; d[0].size(int(s * .05)); d[1].size(int(s * .05)); }
     void process(float* L, float* R, int n, const float* mix, int t, float depth, float hz) { float inc = hz / (float)sr; for (int i = 0; i < n; ++i) { ph += inc; if (ph > 1) ph -= 1; float m = mix[i >> 5];
