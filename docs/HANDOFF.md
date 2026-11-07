@@ -84,6 +84,19 @@ Build tests with `-DSK_TESTS=ON`. `tests/qa.cpp` (`sk_qa <voice.wav> [groups]`) 
 
 Bugs found and fixed by QA: out-of-bounds delay-line read (caused intermittent NaNs), clicks on output, codec swaps and IR module toggles, tiny popup menus, bypass latency, Speex delay mismatch, offline bounce before IRs were ready, host re-selecting a program wiping user edits, MIDI trigger allocating on the audio thread.
 
+## Next: more free IRs (decided 2026-11-07)
+
+Anal-Log will be **free and non-commercial** (no ads, no upsell, no lead capture), so CC BY-NC sources are allowed. Tag every IR with its license in `tools/prepare_irs.py` so NC files can be removed if it is ever sold. Credit every source in `THIRD_PARTY_NOTICES.txt`.
+
+To download (the session needs these domains allowed; a session started before they were allowed cannot reach them):
+- MIT IR Survey, CC BY 4.0, 270 real places (offices, streets, stations, bars, shops): huggingface.co/datasets/benjamin-paine/mit-impulse-response-survey. Pick ~20 for ROOM.
+- BUT Speech@FIT ReverbDB, CC BY 4.0, 9 rooms (office, hotel room, meeting room, stairwell, lecture rooms): speech.fit.vut.cz/software/but-speech-fit-reverb-database. RIRs only. Pick ~5 for ROOM.
+- MicIRP, CC BY-SA 4.0 (credit "MicIRP & Xaudia.com" with link), vintage mics (crystal element, ribbons, Shure 510C, Western Electric/Altec 639, RCA KU3a, Reslo, faulty AKG D12): micirp.blogspot.com (files on Google Drive). Pick ~10 for MIC; IRs stay CC BY-SA.
+- Surrey microphone IRs, CC BY 4.0, 25 mics, 1.5 GB: zenodo.org/records/4633508 (optional).
+- OpenAIR (York): check each file's license; CC BY and CC BY-NC are fine.
+- Do not use: EchoThief (needs the author's permission), TONE3000 packs (no redistribution), Voxengo (only unaltered copies), IRs from Audio Ease's site.
+- Device IRs (phones, radios, walkie-talkies, megaphones) are not available under free licenses; the plan is for the owner to record his own with a sweep.
+
 ## Open items
 
 1. Owner testing of 0.2.0 in Cubase: every switch and title toggle, IR and target pickers, Telecom switching on from OFF, the edited-preset star, readability at his window size.
