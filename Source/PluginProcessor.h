@@ -13,11 +13,11 @@ public:
     bool isBusesLayoutSupported(const BusesLayout&) const override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override; void processBlockBypassed(juce::AudioBuffer<float>&, juce::MidiBuffer&) override; void loadPreset(int i) { applyPreset(i); }
     juce::AudioProcessorEditor* createEditor() override; bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return "Speakit"; } bool acceptsMidi() const override { return true; } bool producesMidi() const override { return false; } double getTailLengthSeconds() const override { return 4.0; }
+    const juce::String getName() const override { return "Anal-Log"; } juce::AudioProcessorParameter* getBypassParameter() const override; bool acceptsMidi() const override { return true; } bool producesMidi() const override { return false; } double getTailLengthSeconds() const override { return 4.0; }
     int getNumPrograms() override; int getCurrentProgram() override { return presetIdx; } void setCurrentProgram(int) override; const juce::String getProgramName(int) override; void changeProgramName(int, const juce::String&) override {}
     void getStateInformation(juce::MemoryBlock&) override; void setStateInformation(const void*, int) override;
     juce::AudioProcessorValueTreeState apvts; static constexpr int maxB = 2048;
-    inline static std::atomic<int> guardHits { 0 }; std::atomic<float> inDb { -90 }, outDb { -90 }, grDb { 0 };
+    inline static std::atomic<int> guardHits { 0 }; std::atomic<float> scope[256] {}; std::atomic<int> scopeW { 0 }; std::atomic<float> inDb { -90 }, outDb { -90 }, grDb { 0 };
     void service(); // applies pending IR changes; called by timer, and by tests
     // sample bay
     struct Slot { std::atomic<bool> on { false }; std::atomic<float> gain { 1 }; std::atomic<juce::AudioBuffer<float>*> data { nullptr }; double pos = 0; float env = 0; };
@@ -38,7 +38,7 @@ private:
     std::unordered_map<std::string, std::atomic<float>*> pv; float PS(const char* id) const { return pv.at(id)->load(); }
     mutable std::unordered_map<const void*, std::atomic<float>*> fast; bool warming = false;
     float P(const char* id) { auto i = fast.find(id); if (i != fast.end()) return i->second->load(); auto* a = pv.at(id); if (warming) fast[id] = a; return a->load(); }
-    std::atomic<float>* lp[4][4] {}; sk::Smooth inS, outS; sk::Delay byp[2]; std::atomic<bool> want[5][12];
+    std::atomic<float>* lp[4][4] {}; sk::Smooth bypS; bool forceBypass = false, firstByp = true; float scPk = 0; int scN = 0; sk::Smooth inS, outS; sk::Delay byp[2]; std::atomic<bool> want[5][12];
     void applyPreset(int i);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpeakitProcessor)
 };

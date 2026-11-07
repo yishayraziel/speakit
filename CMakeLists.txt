@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SPEAKIT VERSION 0.2.0)
+project(SPEAKIT VERSION 0.4.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(APPLE)
@@ -13,14 +13,14 @@ else()
   FetchContent_MakeAvailable(JUCE)
 endif()
 juce_add_plugin(SPEAKIT
-  COMPANY_NAME "YRAZIEL" COMPANY_WEBSITE "https://yraziel.com" BUNDLE_ID com.yraziel.speakit
-  PLUGIN_MANUFACTURER_CODE Yraz PLUGIN_CODE Spkt
+  COMPANY_NAME "YRAZIEL" COMPANY_WEBSITE "https://yraziel.com" BUNDLE_ID com.yraziel.anallog
+  PLUGIN_MANUFACTURER_CODE Yraz PLUGIN_CODE Anlg
   IS_SYNTH FALSE NEEDS_MIDI_INPUT TRUE NEEDS_MIDI_OUTPUT FALSE IS_MIDI_EFFECT FALSE
   EDITOR_WANTS_KEYBOARD_FOCUS FALSE COPY_PLUGIN_AFTER_BUILD FALSE
   FORMATS VST3 AU Standalone VST3_CATEGORIES Fx Distortion AU_MAIN_TYPE kAudioUnitType_MusicEffect
-  PRODUCT_NAME "Speakit")
+  PRODUCT_NAME "Anal-Log")
 file(GLOB IRS CONFIGURE_DEPENDS Resources/ir/*.flac Resources/bay/*.ogg Resources/skin/*.png Resources/skin/*.jpg)
-juce_add_binary_data(SPEAKITData SOURCES ${IRS} Resources/fonts/BarlowCondensed-600.ttf Resources/fonts/BarlowCondensed-700.ttf THIRD_PARTY_NOTICES.txt)
+juce_add_binary_data(SPEAKITData SOURCES ${IRS} Resources/fonts/BarlowCondensed-600.ttf Resources/fonts/BarlowCondensed-700.ttf Resources/fonts/VT323-Regular.ttf THIRD_PARTY_NOTICES.txt)
 set(TP third_party)
 file(GLOB GSM_SRC ${TP}/libgsm/src/*.c)
 list(FILTER GSM_SRC EXCLUDE REGEX "toast|debug|gsm_print|gsm_explode|gsm_implode")

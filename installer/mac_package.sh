@@ -1,5 +1,5 @@
 #!/bin/bash
-# Signs (Developer ID), notarizes and packages Speakit for macOS.
+# Signs (Developer ID), notarizes and packages Anal-Log for macOS.
 # Without the signing secrets it falls back to an ad-hoc signed, un-notarized build.
 set -euo pipefail
 # surface failures as GitHub annotations (readable without the raw logs)
@@ -23,9 +23,9 @@ notarize() {   # notarize "$1" and fail with Apple's log if it isn't accepted
   fi
 }
 VERSION="${VERSION:-1.0.0}"
-APP="build/SPEAKIT_artefacts/Release/Standalone/Speakit.app"
-AU="build/SPEAKIT_artefacts/Release/AU/Speakit.component"
-VST="build/SPEAKIT_artefacts/Release/VST3/Speakit.vst3"
+APP="build/SPEAKIT_artefacts/Release/Standalone/Anal-Log.app"
+AU="build/SPEAKIT_artefacts/Release/AU/Anal-Log.component"
+VST="build/SPEAKIT_artefacts/Release/VST3/Anal-Log.vst3"
 OUT="$PWD/out"; mkdir -p "$OUT" pkgroot/vst3 pkgroot/au pkgroot/app dmg
 
 SIGNED=0
@@ -66,27 +66,27 @@ else
   codesign --force --deep -s - "$APP"
 fi
 
-(cd "$(dirname "$VST")" && ditto -c -k --keepParent Speakit.vst3 "$OUT/Speakit_mac_VST3.zip")
+(cd "$(dirname "$VST")" && ditto -c -k --keepParent Anal-Log.vst3 "$OUT/Anal-Log_mac_VST3.zip")
 
 cp -R "$VST" pkgroot/vst3/
 cp -R "$AU" pkgroot/au/
 cp -R "$APP" pkgroot/app/
-pkgbuild --root pkgroot/vst3 --identifier com.yraziel.speakit.vst3 --version "$VERSION" --install-location "/Library/Audio/Plug-Ins/VST3" vst3.pkg
-pkgbuild --root pkgroot/au --identifier com.yraziel.speakit.au --version "$VERSION" --install-location "/Library/Audio/Plug-Ins/Components" au.pkg
-pkgbuild --root pkgroot/app  --identifier com.yraziel.speakit.app  --version "$VERSION" --install-location "/Applications" app.pkg
+pkgbuild --root pkgroot/vst3 --identifier com.yraziel.anallog.vst3 --version "$VERSION" --install-location "/Library/Audio/Plug-Ins/VST3" vst3.pkg
+pkgbuild --root pkgroot/au --identifier com.yraziel.anallog.au --version "$VERSION" --install-location "/Library/Audio/Plug-Ins/Components" au.pkg
+pkgbuild --root pkgroot/app  --identifier com.yraziel.anallog.app  --version "$VERSION" --install-location "/Applications" app.pkg
 if [ $SIGNED = 1 ]; then
-  productbuild --sign "$INST_ID" --timestamp --package vst3.pkg --package au.pkg --package app.pkg "dmg/Speakit Installer.pkg"
-  notarize "dmg/Speakit Installer.pkg"
-  staple "dmg/Speakit Installer.pkg"
+  productbuild --sign "$INST_ID" --timestamp --package vst3.pkg --package au.pkg --package app.pkg "dmg/Anal-Log Installer.pkg"
+  notarize "dmg/Anal-Log Installer.pkg"
+  staple "dmg/Anal-Log Installer.pkg"
 else
-  productbuild --package vst3.pkg --package au.pkg --package app.pkg "dmg/Speakit Installer.pkg"
+  productbuild --package vst3.pkg --package au.pkg --package app.pkg "dmg/Anal-Log Installer.pkg"
 fi
-cp docs/Speakit_Manual.pdf dmg/ || true
-hdiutil create -volname "Speakit" -srcfolder dmg -ov -format UDZO "$OUT/Speakit_mac.dmg"
+cp docs/Anal-Log_Manual.pdf dmg/ || true
+hdiutil create -volname "Anal-Log" -srcfolder dmg -ov -format UDZO "$OUT/Anal-Log_mac.dmg"
 if [ $SIGNED = 1 ]; then
-  codesign --force --timestamp --sign "$APP_ID" "$OUT/Speakit_mac.dmg"
-  notarize "$OUT/Speakit_mac.dmg"
-  staple "$OUT/Speakit_mac.dmg"
-  spctl -a -vvv -t install "dmg/Speakit Installer.pkg" || true
+  codesign --force --timestamp --sign "$APP_ID" "$OUT/Anal-Log_mac.dmg"
+  notarize "$OUT/Anal-Log_mac.dmg"
+  staple "$OUT/Anal-Log_mac.dmg"
+  spctl -a -vvv -t install "dmg/Anal-Log Installer.pkg" || true
 fi
 ls -la "$OUT"

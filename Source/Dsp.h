@@ -39,9 +39,9 @@ struct Eq { Biquad hp, lp, lo, hi, p1, p2, nHp, nLp, nMid; double sr = 48000; vo
             L[i] = l + (a - l) * m; R[i] = r + (c - r) * m; } } };
 enum DriveType { dAnalog, dTube, dFuzz, dHardClip, dFold, dRectify, dNumTypes };
 inline const char* const driveNames[] = {"ANALOG","TUBE","FUZZ","HARD CLIP","FOLDBACK","RECTIFY"};
-struct Drive { std::unique_ptr<juce::dsp::Oversampling<float>> os; Biquad preP, preL; Delay dl, dr; float dcx[2] {}, dcy[2] {}; double sr = 48000; int lat = 0; juce::AudioBuffer<float> tmp; Smooth pre[2], mixS;
+struct Drive { std::unique_ptr<juce::dsp::Oversampling<float>> os; Biquad preP, preL, preH, tone; Delay dl, dr; float dcx[2] {}, dcy[2] {}; double sr = 48000; int lat = 0; juce::AudioBuffer<float> tmp; Smooth pre[2], mixS;
     void prepare(double s, int block) { sr = s; os = std::make_unique<juce::dsp::Oversampling<float>>(2, 2, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, true); os->initProcessing((size_t)block); os->reset(); lat = (int)std::lround(os->getLatencyInSamples()); dl.size(lat + 8); dr.size(lat + 8); tmp.setSize(2, block); preP.reset(); preL.reset(); pre[0].setTime(s * 4, 8); pre[1].setTime(s * 4, 8); mixS.setTime(s, 8); }
-    void clearState() { preP.reset(); preL.reset(); dl.clear(); dr.clear(); dcx[0] = dcx[1] = dcy[0] = dcy[1] = 0; os->reset(); }
+    void clearState() { preP.reset(); preL.reset(); preH.reset(); tone.reset(); dl.clear(); dr.clear(); dcx[0] = dcx[1] = dcy[0] = dcy[1] = 0; os->reset(); }
     static float shape(float x, int t, float c) { float k = 1 + c * 3; switch (t) {
         case dTube: { float y = x >= 0 ? std::tanh(x * k) : std::tanh(x * k * .6f) / .6f * .7f; return y; }
         case dFuzz: { float y = std::tanh(x * k * 4); return juce::jlimit(-.8f, .8f, y + .15f * y * y); }
@@ -49,12 +49,13 @@ struct Drive { std::unique_ptr<juce::dsp::Oversampling<float>> os; Biquad preP, 
         case dFold: { float y = x * (1 + c); for (int i = 0; i < 4 && std::abs(y) > 1; ++i) y = y > 0 ? 2 - y : -2 - y; return y; }
         case dRectify: return (1 - c) * x + c * (std::abs(x) * 2 - .6f);
         default: return std::tanh(x * k + .08f * c) ; } }
-    void process(float* L, float* R, int n, const float* mix, const float* preDb, float postDb, int type, float curve, float pf, float pg, float pq, float pl) { float s = (float)sr; preP.peak(pf, pq, pg, s); preL.lp(pl, .8f, s);
-        float* ch[2] = {tmp.getWritePointer(0), tmp.getWritePointer(1)}; for (int i = 0; i < n; ++i) { ch[0][i] = preL.tick(preP.tick(L[i], 0), 0); ch[1][i] = preL.tick(preP.tick(R[i], 1), 1); }
-        juce::dsp::AudioBlock<float> b(ch, 2, (size_t)n); auto u = os->processSamplesUp(b); int un = (int)u.getNumSamples(); float pd = db2g(postDb);
-        for (int c = 0; c < 2; ++c) { auto* d = u.getChannelPointer((size_t)c); for (int i = 0; i < un; ++i) { float g = db2g(pre[c].next(preDb[(i / 4) >> 5])); float y = shape(d[i] * g, type, curve) * pd; float o = y - dcx[c] + .9995f * dcy[c]; dcx[c] = y; dcy[c] = o; d[i] = o; } }
-        os->processSamplesDown(b);
-        for (int i = 0; i < n; ++i) { dl.push(L[i]); dr.push(R[i]); float m = mixS.next(mix[i >> 5]); L[i] = dl.at((float)lat) * (1 - m) + ch[0][i] * m; R[i] = dr.at((float)lat) * (1 - m) + ch[1][i] * m; } } };
+    // pre: HPF, LPF and a peak; shaper with bias and asymmetry at 4x; tone low-pass and output after; Link trims output as drive rises
+    void process(float* L, float* R, int n, const float* mix, const float* preDb, float postDb, int type, float curve, float pf, float pg, float pq, float pl, float hpf, float toneHz, float bias, float asym, bool link) { float s = (float)sr; preP.peak(pf, pq, pg, s); preL.lp(pl, .8f, s); preH.hp(hpf, .7f, s); tone.lp(toneHz, .7f, s);
+        float* ch[2] = {tmp.getWritePointer(0), tmp.getWritePointer(1)}; for (int i = 0; i < n; ++i) { ch[0][i] = preL.tick(preP.tick(preH.tick(L[i], 0), 0), 0); ch[1][i] = preL.tick(preP.tick(preH.tick(R[i], 1), 1), 1); }
+        juce::dsp::AudioBlock<float> b(ch, 2, (size_t)n); auto u = os->processSamplesUp(b); int un = (int)u.getNumSamples(); float bs = bias * .35f, ap = 1 + asym, an = 1 - asym;
+        for (int c = 0; c < 2; ++c) { auto* d = u.getChannelPointer((size_t)c); for (int i = 0; i < un; ++i) { float pdb = pre[c].next(preDb[(i / 4) >> 5]); float g = db2g(pdb); float x = d[i] * g + bs; x *= x >= 0 ? ap : an; float y = shape(x, type, curve) * db2g(postDb - (link ? pdb * .7f : 0.f)); float o = y - dcx[c] + .9995f * dcy[c]; dcx[c] = y; dcy[c] = o; d[i] = o; } }
+        os->processSamplesDown(b); const bool useTone = toneHz < 15900.f;
+        for (int i = 0; i < n; ++i) { dl.push(L[i]); dr.push(R[i]); float m = mixS.next(mix[i >> 5]); float a = useTone ? tone.tick(ch[0][i], 0) : ch[0][i], c2 = useTone ? tone.tick(ch[1][i], 1) : ch[1][i]; L[i] = dl.at((float)lat) * (1 - m) + a * m; R[i] = dr.at((float)lat) * (1 - m) + c2 * m; } } };
 struct Crush { float hL = 0, hR = 0, ph = 0; void process(float* L, float* R, int n, const float* mix, const float* amt) { for (int i = 0; i < n; ++i) { float a = amt[i >> 5], m = mix[i >> 5]; float bits = 16 - a * 13, step = std::pow(2.f, 1 - bits), hold = 1 + a * a * 40; ph += 1; if (ph >= hold) { ph -= hold; hL = std::round(L[i] / step) * step; hR = std::round(R[i] / step) * step; } L[i] += (hL - L[i]) * m; R[i] += (hR - R[i]) * m; } } };
 enum ModType { mTremolo, mChorus, mPhaser, mFlanger, mVibrato };
 struct Mod { Delay d[2]; float ph = 0, ap[2][4] {}, fb[2] {}; double sr = 48000; void clear() { d[0].clear(); d[1].clear(); std::fill(&ap[0][0], &ap[0][0] + 8, 0.f); fb[0] = fb[1] = 0; } void prepare(double s) { sr = s; d[0].size(int(s * .05)); d[1].size(int(s * .05)); }

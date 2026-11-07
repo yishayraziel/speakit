@@ -1,22 +1,22 @@
-; Inno Setup script for Speakit (Windows, 64-bit)
-#define AppName "Speakit"
+; Inno Setup script for Anal-Log (Windows, 64-bit)
+#define AppName "Anal-Log"
 #ifndef AppVersion
 #define AppVersion "0.1.0"
 #endif
 
 [Setup]
-AppId={{A7C41E90-2B63-4D18-9F05-6E8D2C713B44}
+AppId={{3E9B7C21-5A4D-4F80-B6E2-91C0D47A8F15}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=YRAZIEL
 AppPublisherURL=https://yraziel.com
-DefaultDirName={autopf}\YRAZIEL\Speakit
+DefaultDirName={autopf}\YRAZIEL\Anal-Log
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 OutputDir=Output
-OutputBaseFilename=Speakit_win_setup
+OutputBaseFilename=Anal-Log_win_setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -26,10 +26,10 @@ Name: "vst3"; Description: "VST3 plugin"; Types: full compact custom; Flags: fix
 Name: "standalone"; Description: "Standalone app"; Types: full
 
 [Files]
-Source: "..\build\SPEAKIT_artefacts\Release\VST3\Speakit.vst3\*"; DestDir: "{commoncf64}\VST3\Speakit.vst3"; Components: vst3; Flags: recursesubdirs ignoreversion
-Source: "..\build\SPEAKIT_artefacts\Release\Standalone\Speakit.exe"; DestDir: "{app}"; Components: standalone; Flags: ignoreversion
-Source: "..\docs\Speakit_Manual.pdf"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\build\SPEAKIT_artefacts\Release\VST3\Anal-Log.vst3\*"; DestDir: "{commoncf64}\VST3\Anal-Log.vst3"; Components: vst3; Flags: recursesubdirs ignoreversion
+Source: "..\build\SPEAKIT_artefacts\Release\Standalone\Anal-Log.exe"; DestDir: "{app}"; Components: standalone; Flags: ignoreversion
+Source: "..\docs\Anal-Log_Manual.pdf"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
-Name: "{autoprograms}\Speakit"; Filename: "{app}\Speakit.exe"; Components: standalone
-Name: "{autoprograms}\Speakit Manual"; Filename: "{app}\Speakit_Manual.pdf"
+Name: "{autoprograms}\Anal-Log"; Filename: "{app}\Anal-Log.exe"; Components: standalone
+Name: "{autoprograms}\Anal-Log Manual"; Filename: "{app}\Anal-Log_Manual.pdf"

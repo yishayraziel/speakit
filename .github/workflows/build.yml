@@ -1,4 +1,4 @@
-name: Build Speakit
+name: Build Anal-Log
 
 on:
   push:
@@ -26,10 +26,10 @@ jobs:
         run: VERSION=$(sed -nE 's/^project\(SPEAKIT VERSION ([0-9.]+)\)/\1/p' CMakeLists.txt) installer/mac_package.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: Speakit-mac
+          name: Anal-Log-mac
           path: |
-            out/Speakit_mac.dmg
-            out/Speakit_mac_VST3.zip
+            out/Anal-Log_mac.dmg
+            out/Anal-Log_mac_VST3.zip
 
   windows:
     runs-on: windows-latest
@@ -48,12 +48,12 @@ jobs:
           if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
           $v = (Select-String -Path CMakeLists.txt -Pattern 'project\(SPEAKIT VERSION ([0-9.]+)\)').Matches[0].Groups[1].Value
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" installer\speakit.iss
-          Compress-Archive -Path build\SPEAKIT_artefacts\Release\VST3\Speakit.vst3 -DestinationPath Speakit_win_VST3.zip
-          Move-Item installer\Output\Speakit_win_setup.exe Speakit_win_setup.exe
+          Compress-Archive -Path build\SPEAKIT_artefacts\Release\VST3\Anal-Log.vst3 -DestinationPath Anal-Log_win_VST3.zip
+          Move-Item installer\Output\Anal-Log_win_setup.exe Anal-Log_win_setup.exe
       - uses: actions/upload-artifact@v4
         with:
-          name: Speakit-windows
+          name: Anal-Log-windows
           path: |
-            Speakit_win_setup.exe
-            Speakit_win_VST3.zip
+            Anal-Log_win_setup.exe
+            Anal-Log_win_VST3.zip
 

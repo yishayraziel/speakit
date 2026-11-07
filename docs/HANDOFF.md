@@ -1,10 +1,10 @@
-# Speakit: project handoff
+# Anal-Log (formerly Speakit): project handoff
 
-Read this before working on Speakit. It records what was built, why, and what is still open, as of version 0.2.0 (commit a2a119a, 2026-11-06).
+Read this before working on Anal-Log. It records what was built, why, and what is still open, as of version 0.4.0 (2026-11-07). The product was renamed from Speakit to Anal-Log in 0.4.0; internal names (CMake target SPEAKIT, classes SpeakitProcessor/SpeakitEditor, repo yishayraziel/speakit) were kept.
 
 ## What it is
 
-Speakit is Yishay Raziel's own speaker, phone and radio simulator plugin. It was inspired by the category Audio Ease Speakerphone 3 belongs to, but all DSP, IRs, samples, presets and UI are independent work.
+Anal-Log is Yishay Raziel's own speaker, phone and radio simulator plugin. It was inspired by the category Audio Ease Speakerphone 3 belongs to, but all DSP, IRs, samples, presets and UI are independent work.
 
 - Formats: VST3, AU, Standalone. macOS (signed and notarized) and Windows (unsigned).
 - Framework: JUCE 8.0.4, C++17, CMake.
@@ -54,12 +54,15 @@ Input gain, then Sample Bay PRE bus, then Speaker if set to PRE, then Gate, Comp
 - **Sample Bay:** 60 sounds in 5 banks of 12 (STREET, INDOORS, LINE, MACHINES, MUSIC), Ogg Vorbis. Sources: CC0 recordings from noixer (from Freesound) and AtomCut packs, plus original synthesized line sounds (dial tones, DTMF, modem, hum, hiss). MIDI note 36 and up triggers pads. Built by `tools/prepare_samples.py`, which writes `Source/BayManifest.h`.
 - **Presets:** 26 factory presets in `Source/Presets.h`. The display adds " *" when a preset has been edited.
 
-## UI (0.2.0)
+## UI (0.4.0)
 
-- Skin: textures and parts cut from the owner's approved ChatGPT render by `tools/make_skin.py` and `tools/cut_parts.py`. Fonts: Barlow Condensed (OFL). LCDs use a built-in 5x7 dot font.
-- **MAIN page:** full-width tabs (MAIN, EDIT, FX, SAMPLES); three numbered rows that read as the signal path: 1 PREPARE (Input, Gate, Comp, EQ), 2 TRANSMIT (Drive, Telecom, Crush, FX summary), 3 PLAYBACK (Speaker, Cover, Mic, Room). Each card has ON/OFF with an amber LED, dims when off, and toggles by its switch or title. Right column: Dry/Wet (whole chain), IN and OUT meters with a target zone, Output, Sample Bay status. Footer: LFO 1, LFO 2, ENV with a "TO:" target picker; speaker grille at bottom right.
-- EDIT, FX and SAMPLES pages hold all deep controls, 10 snapshots, and the 60 pads.
-- The editor is drawn on a 1932 px canvas and scaled; popup menus counter-scale so their text stays readable.
+- Look adopted from the owner's earlier ChatGPT project: orange vintage-computer chassis (`Resources/skin/chassis.jpg`), green CRT, cream knobs and keycaps. Fonts: Barlow Condensed for panel labels, VT323 (OFL) for the screen.
+- Canvas 1686 x 933, scaled as one; popup menus counter-scale.
+- **Screen (left):** name, version, preset browser (< name * >, click name for list), selected module and its state, the signal chain in three rows (lit = on, outline = off, click to open), Drive transfer curve on the Drive page or a scrolling output picture elsewhere, IN/OUT meters.
+- **Right panel:** the selected page. Module pages have an ON/OFF switch; controls dim when the module is off. Knobs show a numbered scale and value; choices with up to 4 options are stepped knobs, longer lists are green LCD boxes (IR and codec boxes have < > arrows).
+- **Keys (bottom):** 15 modules in signal order plus IN/OUT, LFO, ENV, SAMPLES, MEMORY. The green LED on a module key means ON; clicking the LED toggles the module.
+- **Bottom right:** DRY / WET macro and BYPASS (host bypass parameter, latency compensated, click-free crossfade).
+- New in 0.4.0 DSP: Drive gained HPF, TONE, BIAS, ASYM and LINK (output compensates drive).
 
 ## Build, sign, release
 
@@ -88,7 +91,7 @@ Bugs found and fixed by QA: out-of-bounds delay-line read (caused intermittent N
 3. AU has never been tested; Windows has never been run and is unsigned.
 4. Re-run ASan on 0.2.0; reduce worst-case CPU.
 5. Confirm each noixer sound's license on its Freesound page.
-6. Trademark check on the name "Speakit" and a legal review before selling.
+6. Trademark check on the name "Anal-Log" (also: the name may be filtered by some stores or search engines) and a legal review before selling.
 7. Decide whether the repo stays public (it exposes the code, skin, IRs and samples).
 8. Replace the 16 modeled IRs with real captures (sweep method in the build spec).
-9. Still simpler than the reference category: no drive curve display, no user sample import, snapshots not automatable, Dry/Wet curves not saved per preset.
+9. Still simpler than the reference category: no user sample import, snapshots not automatable, Dry/Wet curves not saved per preset.
