@@ -47,6 +47,12 @@ struct Lnf : LookAndFeel_V4 {
         LookAndFeel_V4::drawPopupMenuItem(g, area, sep, active, hl, ticked, sub, text, sc, icon, col); }
 };
 void styled(PopupMenu& m, Component* at) { m.setLookAndFeel(&at->getLookAndFeel()); }
+// IR lists: indices are stable (new IRs are appended), so menus and arrows walk them grouped,
+// groups in first-appearance order, items in index order within a group.
+std::vector<int> irOrder(const IrInfo* ir, int n) { std::vector<int> o; StringArray gs; for (int i = 0; i < n; ++i) gs.addIfNotAlreadyThere(ir[i].group); for (auto& g : gs) for (int i = 0; i < n; ++i) if (g == ir[i].group) o.push_back(i); return o; }
+void irMenu(AudioParameterChoice* c, const IrInfo* ir, Component* at) { PopupMenu m; int n = c->choices.size(); StringArray gs; for (int i = 0; i < n; ++i) gs.addIfNotAlreadyThere(ir[i].group);
+    for (auto& g : gs) { PopupMenu sub; bool has = false; for (int i = 0; i < n; ++i) if (g == ir[i].group) { sub.addItem(i + 1, String(ir[i].name) + (ir[i].modeled ? "  (modeled)" : ""), true, i == c->getIndex()); has |= i == c->getIndex(); } m.addSubMenu(g, sub, true, nullptr, has); }
+    styled(m, at); m.showMenuAsync(PopupMenu::Options().withTargetComponent(at), [c](int x) { if (x > 0) { c->beginChangeGesture(); c->setValueNotifyingHost(c->convertTo0to1(float(x - 1))); c->endChangeGesture(); } }); }
 void choiceMenu(AudioParameterChoice* c, Component* at) { PopupMenu m; for (int i = 0; i < c->choices.size(); ++i) m.addItem(i + 1, c->choices[i], true, i == c->getIndex()); styled(m, at); m.showMenuAsync(PopupMenu::Options().withTargetComponent(at), [c](int x) { if (x > 0) { c->beginChangeGesture(); c->setValueNotifyingHost(c->convertTo0to1(float(x - 1))); c->endChangeGesture(); } }); }
 void setParam(RangedAudioParameter* p, float v) { p->beginChangeGesture(); p->setValueNotifyingHost(p->convertTo0to1(v)); p->endChangeGesture(); }
 
@@ -87,8 +93,8 @@ struct Lcd : Component { AudioParameterChoice* c; String title; bool wide; const
     Lcd(AudioProcessorValueTreeState& st, const String& id, const String& t, bool w) : c(dynamic_cast<AudioParameterChoice*>(st.getParameter(id))), title(t), wide(w) {}
     bool inl() const { return !wide && getHeight() < 140; }
     Rectangle<float> box() const { if (inl()) return getLocalBounds().toFloat().withTrimmedTop(30).reduced(4, 0).withSizeKeepingCentre((float)getWidth() - 8, 50); return wide ? getLocalBounds().toFloat().withTrimmedLeft(170).reduced(0, 4) : getLocalBounds().toFloat().withTrimmedTop(34).withSizeKeepingCentre(jmin((float)getWidth() - 8, 260.f), 54); }
-    void step(int d) { int n = c->choices.size(); setParam(c, float((c->getIndex() + d + n) % n)); }
-    void mouseDown(const MouseEvent& e) override { auto b = box(); if (wide && e.position.x < b.getX() + 60) step(-1); else if (wide && e.position.x > b.getRight() - 60) step(1); else if (b.contains(e.position)) choiceMenu(c, this); }
+    void step(int d) { int n = c->choices.size(); if (ir) { auto o = irOrder(ir, n); int k = 0; for (int i = 0; i < n; ++i) if (o[(size_t)i] == c->getIndex()) k = i; setParam(c, float(o[(size_t)((k + d + n) % n)])); } else setParam(c, float((c->getIndex() + d + n) % n)); }
+    void mouseDown(const MouseEvent& e) override { auto b = box(); if (wide && e.position.x < b.getX() + 60) step(-1); else if (wide && e.position.x > b.getRight() - 60) step(1); else if (b.contains(e.position)) { if (ir) irMenu(c, ir, this); else choiceMenu(c, this); } }
     void paint(Graphics& g) override { auto b = box(); g.setColour(ink); g.setFont(bar(wide ? 32 : 28)); if (wide) g.drawText(title, 0, 0, 160, getHeight(), Justification::centredLeft); else g.drawText(title, 0, 0, getWidth(), 30, Justification::centred);
         g.setColour(Colour(0xff060d07)); g.fillRoundedRectangle(b, 8); g.setColour(Colour(0xff3a3a36)); g.drawRoundedRectangle(b, 8, 3); g.setColour(phos);
         String t = c->getCurrentChoiceName().toUpperCase(); if (ir) { auto& e = ir[c->getIndex()]; t = String(e.group).toUpperCase() + " / " + String(e.name).toUpperCase() + (e.modeled ? "  (MODELED)" : ""); }

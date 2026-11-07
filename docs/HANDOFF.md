@@ -1,6 +1,6 @@
 # Anal-Log (formerly Speakit): project handoff
 
-Read this before working on Anal-Log. It records what was built, why, and what is still open, as of version 0.4.0 (2026-11-07). The product was renamed from Speakit to Anal-Log in 0.4.0; internal names (CMake target SPEAKIT, classes SpeakitProcessor/SpeakitEditor, repo yishayraziel/speakit) were kept.
+Read this before working on Anal-Log. It records what was built, why, and what is still open, as of version 0.4.5 (2026-11-07). The product was renamed from Speakit to Anal-Log in 0.4.0; internal names (CMake target SPEAKIT, classes SpeakitProcessor/SpeakitEditor, repo yishayraziel/speakit) were kept.
 
 ## What it is
 
@@ -50,7 +50,12 @@ Input gain, then Sample Bay PRE bus, then Speaker if set to PRE, then Gate, Comp
 
 ## Content
 
-- **IRs:** 62 total (23 speaker, 15 cover, 9 mic, 15 room), level-matched, stored as FLAC. 46 come from IR-Library by Conner (MIT, https://github.com/itsmusician/IR-Library). 16 are original "modeled" IRs generated from target curves for devices the library lacks (desk phone, payphone, walkie-talkie, megaphone, transistor radio, intercoms, TVs, modeled mics); the menu labels them "(modeled)". Real captures should replace them later. Built by `tools/prepare_irs.py`, which writes `Source/IrManifest.h`.
+- **IRs:** 101 total (23 speaker, 15 cover, 20 mic, 43 room), level-matched, stored as FLAC (5.6 MB). Built by `tools/prepare_irs.py <IR-Library> <MIT Audio> <BUT dir> <MicIRP dir>`, which writes `Source/IrManifest.h`; every row carries a license tag (`IrInfo::license`).
+  - 46 from IR-Library by Conner (MIT, https://github.com/itsmusician/IR-Library).
+  - 16 original "modeled" IRs generated from target curves (desk phone, payphone, walkie-talkie, megaphone, transistor radio, intercoms, TVs, modeled mics); the menu labels them "(modeled)". Real captures should replace them later.
+  - 0.4.5: 26 rooms from the MIT IR Survey (CC BY 4.0; 32 kHz sources), 2 office positions from BUT ReverbDB room L207 (CC BY 4.0; 16 kHz source, so no content above 8 kHz), 11 vintage mics from MicIRP (CC BY-SA 4.0). Menu names describe the type, never the maker.
+  - **Index stability:** choice parameters store an index, so new IRs are only ever appended to the end of a list (list `N` in the script). Menus and the < > arrows walk the list grouped by `group` (`irOrder()` / `irMenu()` in `PluginEditor.cpp`), so appended rows still land in the right submenu.
+  - Raw downloads live on the owner's Mac in `~/Downloads/Anal-Log IRs/` (MIT `Audio.zip`, the 9.3 GB BUT `.tgz`, `MicIRP/`). Only room L207 of BUT was extracted: the Mac's shell kills processes after 3 minutes, and the other BUT rooms are 16 kHz and duplicate MIT's space types.
 - **Sample Bay:** 60 sounds in 5 banks of 12 (STREET, INDOORS, LINE, MACHINES, MUSIC), Ogg Vorbis. Sources: CC0 recordings from noixer (from Freesound) and AtomCut packs, plus original synthesized line sounds (dial tones, DTMF, modem, hum, hiss). MIDI note 36 and up triggers pads. Built by `tools/prepare_samples.py`, which writes `Source/BayManifest.h`.
 - **Presets:** 26 factory presets in `Source/Presets.h`. The display adds " *" when a preset has been edited.
 
@@ -84,22 +89,19 @@ Build tests with `-DSK_TESTS=ON`. `tests/qa.cpp` (`sk_qa <voice.wav> [groups]`) 
 
 Bugs found and fixed by QA: out-of-bounds delay-line read (caused intermittent NaNs), clicks on output, codec swaps and IR module toggles, tiny popup menus, bypass latency, Speex delay mismatch, offline bounce before IRs were ready, host re-selecting a program wiping user edits, MIDI trigger allocating on the audio thread.
 
-## Next: more free IRs (decided 2026-11-07)
+## Free IR sources (licenses)
 
-Anal-Log will be **free and non-commercial** (no ads, no upsell, no lead capture), so CC BY-NC sources are allowed. Tag every IR with its license in `tools/prepare_irs.py` so NC files can be removed if it is ever sold. Credit every source in `THIRD_PARTY_NOTICES.txt`.
+Anal-Log is **free and non-commercial** (no ads, no upsell, no lead capture), so CC BY-NC sources are allowed. Tag every IR with its license in `tools/prepare_irs.py` so NC files can be removed if it is ever sold. Credit every source in `THIRD_PARTY_NOTICES.txt`.
 
-To download (the session needs these domains allowed; a session started before they were allowed cannot reach them):
-- MIT IR Survey, CC BY 4.0, 270 real places (offices, streets, stations, bars, shops): huggingface.co/datasets/benjamin-paine/mit-impulse-response-survey. Pick ~20 for ROOM.
-- BUT Speech@FIT ReverbDB, CC BY 4.0, 9 rooms (office, hotel room, meeting room, stairwell, lecture rooms): speech.fit.vut.cz/software/but-speech-fit-reverb-database. RIRs only. Pick ~5 for ROOM.
-- MicIRP, CC BY-SA 4.0 (credit "MicIRP & Xaudia.com" with link), vintage mics (crystal element, ribbons, Shure 510C, Western Electric/Altec 639, RCA KU3a, Reslo, faulty AKG D12): micirp.blogspot.com (files on Google Drive). Pick ~10 for MIC; IRs stay CC BY-SA.
-- Surrey microphone IRs, CC BY 4.0, 25 mics, 1.5 GB: zenodo.org/records/4633508 (optional).
-- OpenAIR (York): check each file's license; CC BY and CC BY-NC are fine.
+- Done in 0.4.5: MIT IR Survey, BUT ReverbDB (L207 only), MicIRP. These sites are blocked from the cloud workspace and from the Mac's shell; the owner downloads by hand.
+- Still open: Surrey microphone IRs, CC BY 4.0, 25 mics, 1.5 GB: zenodo.org/records/4633508. OpenAIR (York): check each file's license; CC BY and CC BY-NC are fine.
 - Do not use: EchoThief (needs the author's permission), TONE3000 packs (no redistribution), Voxengo (only unaltered copies), IRs from Audio Ease's site.
 - Device IRs (phones, radios, walkie-talkies, megaphones) are not available under free licenses; the plan is for the owner to record his own with a sweep.
+- Releasing under CC BY-SA content: the MicIRP-derived files must stay CC BY-SA. Note this before any change of license or sale.
 
 ## Open items
 
-1. Owner testing of 0.2.0 in Cubase: every switch and title toggle, IR and target pickers, Telecom switching on from OFF, the edited-preset star, readability at his window size.
+1. Owner testing in Cubase of the new IRs (0.4.5): the grouped IR submenus, < > stepping, and older sessions reopening with the same IR. Also from 0.2.0: every switch and title toggle, IR and target pickers, Telecom switching on from OFF, the edited-preset star, readability at his window size.
 2. An earlier screenshot showed the preset name SHOWER RADIO with settings that did not match it. Not yet confirmed whether he had edited it or it is a bug.
 3. AU has never been tested; Windows has never been run and is unsigned.
 4. Re-run ASan on 0.2.0; reduce worst-case CPU.

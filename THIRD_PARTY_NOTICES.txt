@@ -6,6 +6,20 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+IMPULSE RESPONSES (ROOM): MIT IR Survey, James Traer and Josh H. McDermott, MIT McDermott Lab
+https://mcdermottlab.mit.edu/Reverb/IR_Survey.html - licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Traer, J. & McDermott, J. H. (2016). Statistics of natural reverberation enable perceptual separation of sound and space. PNAS 113(48), E7856-E7865. doi:10.1073/pnas.1612524113
+Changes: selected files trimmed, faded, resampled to 48 kHz, level-normalized and renamed.
+
+IMPULSE RESPONSES (ROOM): BUT Speech@FIT Reverb Database, Brno University of Technology
+https://speech.fit.vut.cz/software/but-speech-fit-reverb-database - licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Szoke, I., Skacel, M., Mosner, L., Paliesek, J. & Cernocky, J. (2019). Building and evaluation of a real room impulse response dataset. IEEE JSTSP 13(4), 863-876. doi:10.1109/JSTSP.2019.2917582
+Changes: two RIRs from room L207 trimmed, faded, resampled to 48 kHz, level-normalized and renamed.
+
+IMPULSE RESPONSES (MIC): MicIRP & Xaudia.com - Microphone Impulse Response Project by Stewart Tavener
+https://micirp.blogspot.com and https://www.xaudia.com - licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
+Changes: trimmed, faded, resampled to 48 kHz, level-normalized and renamed. The modified IR files (Resources/ir/mic_09 to mic_19) remain under CC BY-SA 4.0.
+
 GSM 06.10 CODEC: libgsm
 Copyright 1992, 1993, 1994 by Jutta Degener and Carsten Bormann, Technische Universitaet Berlin
 Permission to use, copy, modify, and distribute this software for any purpose with or without fee is hereby granted, provided that this notice is not removed and that neither the authors nor the Technische Universitaet Berlin are deemed to have made any representations as to the suitability of this software for any purpose nor are held responsible for any defects of this software. THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
