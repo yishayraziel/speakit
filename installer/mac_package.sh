@@ -82,7 +82,8 @@ else
   productbuild --package vst3.pkg --package au.pkg --package app.pkg "dmg/Anal-Log Installer.pkg"
 fi
 cp docs/Anal-Log_Manual.pdf dmg/ || true
-hdiutil create -volname "Anal-Log" -srcfolder dmg -ov -format UDZO "$OUT/Anal-Log_mac.dmg"
+DMG_MB=$(( $(du -sm dmg | cut -f1) * 13 / 10 + 40 ))
+hdiutil create -volname "Anal-Log" -srcfolder dmg -fs HFS+ -size "${DMG_MB}m" -ov -format UDZO "$OUT/Anal-Log_mac.dmg"
 if [ $SIGNED = 1 ]; then
   codesign --force --timestamp --sign "$APP_ID" "$OUT/Anal-Log_mac.dmg"
   notarize "$OUT/Anal-Log_mac.dmg"
