@@ -27,7 +27,7 @@ String fmt(RangedAudioParameter* p, float v, bool shortForm) {
 }
 
 struct Lnf : LookAndFeel_V4 {
-    Image knob = img("knob_cream_png"); float menuFont = 24.f;
+    Image knob = img("knob_dirty_png"); float menuFont = 24.f;
     void drawRotarySlider(Graphics& g, int, int, int w, int h, float pos, float a0, float a1, Slider&) override {
         float side = (float)jmin(w, h), cx = w * .5f, cy = h * .5f, r = side * .42f;
         g.setColour(ink.withAlpha(.85f)); for (int i = 0; i <= 10; ++i) { float a = a0 + (a1 - a0) * i / 10.f, r0 = r * 1.06f, r1 = r * (i % 5 == 0 ? 1.2f : 1.14f); g.drawLine(cx + std::sin(a) * r0, cy - std::cos(a) * r0, cx + std::sin(a) * r1, cy - std::cos(a) * r1, i % 5 == 0 ? 2.4f : 1.6f); }
@@ -65,10 +65,11 @@ struct CreamKnob : Component {
         g.setColour(ink); g.setFont(bar(th < 30 ? 26.f : 30.f, false)); g.drawText(val, 0, getHeight() - (int)th - 4, getWidth(), (int)th + 4, Justification::centred); }
 };
 // Bat-handle toggle with OFF / ON engraved beside it.
-struct Bat : ToggleButton { void paintButton(Graphics& g, bool, bool) override { auto b = getLocalBounds().toFloat(); float cx = b.getCentreX(), cy = b.getCentreY() - 6, r = jmin(b.getWidth() / 7.8f, b.getHeight() * .2f); bool on = getToggleState();
-        g.setColour(Colour(0xff111111)); g.fillEllipse(cx - r * 1.35f, cy - r * 1.35f, r * 2.7f, r * 2.7f); ColourGradient gr(Colour(0xffdcdcdc), cx - r, cy - r, Colour(0xff6c6c6c), cx + r, cy + r, false); g.setGradientFill(gr); g.fillEllipse(cx - r, cy - r, r * 2, r * 2);
-        float a = on ? .7f : -.7f; Point<float> tip(cx + std::sin(a) * r * 2.1f, cy - std::cos(a) * r * 2.1f); g.setColour(Colour(0xffe8e8e8)); g.drawLine(cx, cy, tip.x, tip.y, r * .55f); g.fillEllipse(tip.x - r * .42f, tip.y - r * .42f, r * .84f, r * .84f);
-        g.setFont(bar(20)); g.setColour(on ? dimInk : ink); g.drawText("OFF", Rectangle<float>(cx - r * 3.6f, cy + r * 1.3f, r * 2.4f, 22), Justification::centred); g.setColour(on ? ink : dimInk); g.drawText("ON", Rectangle<float>(cx + r * 1.2f, cy + r * 1.3f, r * 2.4f, 22), Justification::centred); } };
+// Bat-handle toggle: photographed switch (mirrored for OFF), OFF / ON engraved beside it.
+struct Bat : ToggleButton { Image on = img("switch_on_png"), off = img("switch_off_png");
+    void paintButton(Graphics& g, bool, bool) override { auto b = getLocalBounds().toFloat(); float cx = b.getCentreX(), cy = b.getCentreY() - 6, r = jmin(b.getWidth() / 7.8f, b.getHeight() * .2f); bool st = getToggleState();
+        float S = r * 2.9f / .58f; float ox = st ? .49f : .51f; g.drawImage(st ? on : off, Rectangle<float>(cx - S * ox, cy - S * .57f, S, S), RectanglePlacement::stretchToFit);
+        g.setFont(bar(20)); g.setColour(st ? dimInk : ink); g.drawText("OFF", Rectangle<float>(cx - r * 3.6f, cy + r * 1.5f, r * 2.4f, 22), Justification::centred); g.setColour(st ? ink : dimInk); g.drawText("ON", Rectangle<float>(cx + r * 1.2f, cy + r * 1.5f, r * 2.4f, 22), Justification::centred); } };
 struct BatCell : Component { Bat b; String title; std::unique_ptr<BA> att; BatCell(AudioProcessorValueTreeState& st, const String& id, const String& t) : title(t) { addAndMakeVisible(b); att = std::make_unique<BA>(st, id, b); }
     void resized() override { b.setBounds(getLocalBounds().withTrimmedTop(34).withSizeKeepingCentre(jmin(getWidth(), 130), jmin(getHeight() - 34, 110))); }
     void paint(Graphics& g) override { g.setColour(ink); g.setFont(bar(28)); g.drawText(title, 0, 0, getWidth(), 30, Justification::centred); } };
