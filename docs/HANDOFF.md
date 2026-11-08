@@ -77,7 +77,7 @@ cmake --build build --config Release --parallel
 ```
 
 - Pushing to `main` runs `.github/workflows/build.yml`: Mac builds a DMG with a signed installer for VST3, AU and the app, notarized and stapled; Windows builds an Inno Setup installer. Results are downloaded from the run's Artifacts.
-- **Releases:** push a tag `vX.Y.Z` (matching the version in `CMakeLists.txt`) and the `release` job publishes a GitHub Release with `Anal-Log_mac.dmg`, `Anal-Log_mac_VST3.zip`, `Anal-Log_win_setup.exe`, `Anal-Log_win_VST3.zip` and the notices. The download page https://yraziel.com/anal-log/ (repo `yishayraziel/yrazielcom`, `public/anal-log/`) links to `releases/latest/download/<file>`, so keep these file names.
+- **Releases:** put `[release]` in the commit message of a push to main (or push a tag `vX.Y.Z`; tag pushes are blocked from Claude sessions) and the `release` job, named after the version in `CMakeLists.txt`, publishes a GitHub Release with `Anal-Log_mac.dmg`, `Anal-Log_mac_VST3.zip`, `Anal-Log_win_setup.exe`, `Anal-Log_win_VST3.zip` and the notices. The download page https://yraziel.com/anal-log/ (repo `yishayraziel/yrazielcom`, `public/anal-log/`) links to `releases/latest/download/<file>`, so keep these file names.
 - Signing secrets were added once with `installer/setup_mac_signing.sh`. Never put certificates or passwords in the repo or in chat.
 - Version lives in `CMakeLists.txt` (`project(SPEAKIT VERSION x.y.z)`); bump it for each build that goes to the owner.
 - Chrome may block the zip as a "dangerous download"; GitHub CLI download works.

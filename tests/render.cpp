@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
         File wf = out.getChildFile(nn + ".wav"); wf.deleteFile();
         if (auto os = wf.createOutputStream()) { WavAudioFormat w; std::unique_ptr<AudioFormatWriter> wr(w.createWriterFor(os.release(), sr, 2, 24, {}, 0)); wr->writeFromAudioSampleBuffer(res, 0, len); }
         { std::unique_ptr<AudioProcessorEditor> ed(p.createEditor()); for (int i = 0; i < 30; ++i) MessageManager::getInstance()->runDispatchLoopUntil(20);
-          auto img = ed->createComponentSnapshot(ed->getLocalBounds(), true, 1.0f); File pf = out.getChildFile(nn + ".png"); pf.deleteFile();
+          float sc = std::getenv("SK_SNAP_SCALE") ? (float)atof(std::getenv("SK_SNAP_SCALE")) : 1.0f; auto img = ed->createComponentSnapshot(ed->getLocalBounds(), true, sc); File pf = out.getChildFile(nn + ".png"); pf.deleteFile();
           if (auto os = pf.createOutputStream()) PNGImageFormat().writeImageToStream(img, *os);
           printf("%s  %s  latency %d  editor %dx%d\n", nn.toRawUTF8(), name.toRawUTF8(), lat, ed->getWidth(), ed->getHeight()); }
         p.releaseResources();
