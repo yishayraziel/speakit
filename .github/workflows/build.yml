@@ -57,3 +57,34 @@ jobs:
             Anal-Log_win_setup.exe
             Anal-Log_win_VST3.zip
 
+
+  release:
+    # tags v* publish a GitHub Release; yraziel.com/anal-log links to releases/latest/download/<file>
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ macos, windows ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist
+          cp THIRD_PARTY_NOTICES.txt dist/
+          cat > notes.md <<NOTES
+          Anal-Log ${GITHUB_REF_NAME}: free speaker, phone and radio simulator by Yishay Raziel.
+
+          - **Mac:** \`Anal-Log_mac.dmg\` (VST3, AU and standalone app; Apple Silicon + Intel; signed and notarized).
+          - **Windows:** \`Anal-Log_win_setup.exe\` (64-bit). If SmartScreen warns, click More info, then Run anyway.
+          - VST3 only: \`Anal-Log_mac_VST3.zip\`, \`Anal-Log_win_VST3.zip\`.
+
+          Page: https://yraziel.com/anal-log/ · Credits and licenses: \`THIRD_PARTY_NOTICES.txt\`.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" --title "Anal-Log ${GITHUB_REF_NAME#v}" --notes-file notes.md \
+            dist/Anal-Log_mac.dmg dist/Anal-Log_mac_VST3.zip dist/Anal-Log_win_setup.exe dist/Anal-Log_win_VST3.zip dist/THIRD_PARTY_NOTICES.txt
